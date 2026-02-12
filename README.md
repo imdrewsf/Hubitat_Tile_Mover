@@ -1,164 +1,120 @@
-<<<<<<< HEAD
-=======
-hubitat_tile_mover — adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
+# hubitat tile mover
 
-Accepted input JSON shapes (3 levels):
-  A) Full:    { ..., "tiles": [ {...}, ... ], ... }
-  B) Minimal: { "tiles": [ {...}, ... ] }
-  C) Bare:    [ {...}, ... ]
+Command-line tool to bulk-edit Hubitat Dashboard layout JSON by operating on the `tiles` list (row/col only) while preserving all other JSON fields unchanged.
 
-Import (input) (only one; default is clipboard):
-  --import:clipboard
-  --import:file <filename>
+It is designed for **moving/copying/merging whole groups of tiles** (ranges/rows/columns) and for cleanup operations like trimming blank space, cropping to a region, and pruning to selected tiles.
 
-Output destinations (repeatable; default is clipboard if none specified):
-  --output_to:terminal
-  --output_to:clipboard
-  --output_to:file <filename>
+## Features
 
-Output format (single choice; default matches the input level; cannot exceed input):
-  --output_format:full       (Full dashboard JSON)
-  --output_format:minimal    ({"tiles":[...]})
-  --output_format:bare       ([...])
+### Layout actions (choose at most one per run)
+- **Insert**: `--insert_rows`, `--insert_cols`
+- **Move**: `--move_cols`, `--move_rows`, `--move_range`
+- **Copy** (duplicate from the same layout): `--copy_cols`, `--copy_rows`, `--copy_range`
+- **Merge** (import tiles from another layout file): `--merge_source` + `--merge_cols/rows/range`
+- **Remove**:
+  - Delete + shift: `--delete_rows`, `--delete_cols`
+  - Clear only: `--clear_rows`, `--clear_cols`, `--clear_range`
+- **Crop** (remove everything outside a kept range): `--crop_to_rows/cols/range`
+- **Prune** (keep only selected): `--prune_except_ids <comma separated list of tile ids>`, `--prune_except_devices <comma separated list of devices>` 
 
-  Compatibility aliases (accepted):
-    --output_format:container  == minimal
-    --output_format:list       == bare
+### Additional actions (can be combined with the single layout action)
+- **Trim**: `--trim[:top|left|top,left]` (removes empty rows or columns at the top or left of the dashboard runs after the layout action)
+- **Sort**: `--sort` or `--sort:<SPEC>` (this only affects the order tiles appear in the JSON but has no effect on the actual layout)
+- **Scrub orphan CSS**: `--scrub_css`
 
+### Modifiers
+- `--include_overlap`  
+  Select tiles by span intersection (using `rowSpan`/`colSpan`) rather than only the tileâ€™s top-left.
+- Range filters:
+  - `--col_range <start_col> <end_col>` (insert/delete rows only)
+  - `--row_range <start_row> <end_row>` (insert/delete cols only)
+- Destination conflict policy for move/copy/merge:
+  - `--allow_overlap` (force even if destination conflicts exist)
+  - `--skip_overlap` (skip only conflicting tiles)
+  - default: abort before changing anything if conflicts exist
+- Confirmation suppression:
+  - `--force` (skip prompts when tiles/CSS would be removed)
 
-LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
+### CSS options
+- `--cleanup_css`  
+  When tiles are removed, attempt to remove tile-specific CSS rules for removed tile ids.
+- `--ignore_css`  
+  When copying/merging tiles, do not create/merge tile-specific CSS rules for new tile ids.
+- `--scrub_css`  
+  Remove orphan tile-specific CSS rules (CSS references tile ids that do not exist as tiles).
 
-  MOVE EXISTING TILES
+Tile IDs created during copy/merge are always assigned above the maximum of:
+- the highest existing tile id, and
+- the highest tile id referenced in `customCSS`
 
-    Insert empty rows / columns:
-      --insert_rows COUNT AT_ROW
-      --insert_cols COUNT AT_COL
-      Modifiers: --include_overlap, --col_range/--row_range
+This prevents newly created tiles from accidentally reusing ids that still have orphan CSS rules.
 
-    Move tiles:
-      --move_cols START_COL END_COL DEST_START_COL
-      --move_rows START_ROW END_ROW DEST_START_ROW
-      --move_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
-      Modifiers: --include_overlap, --allow_overlap, --skip_overlap
+## Input and Output
 
-  ADD TILES
+### Accepted input JSON shapes
+- **Full**: `{ ..., "tiles": [ ... ], ... }`
+- **Minimal**: `{ "tiles": [ ... ] }`
+- **Bare**: `[ ... ]`
 
-    Copy / duplicate existing tiles (within the input layout):
-      --copy_cols START_COL END_COL DEST_START_COL
-      --copy_rows START_ROW END_ROW DEST_START_ROW
-      --copy_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
-      Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
+### Import (default: clipboard)
+- `--import:clipboard`
+- `--import:file <filename>`
 
-    Merge / import tiles from another layout:
-      --merge_source <filename>
-      --merge_cols START_COL END_COL DEST_START_COL
-      --merge_rows START_ROW END_ROW DEST_START_ROW
-      --merge_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
-      Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
+### Output destinations (repeatable; default: clipboard)
+- `--output_to:clipboard`
+- `--output_to:terminal`
+- `--output_to:file <filename>`
 
-  REMOVE TILES
+### Output format (default: same level as input; cannot exceed input)
+- `--output_format:full`
+- `--output_format:minimal`
+- `--output_format:bare`
 
-    Delete rows / columns (removes tiles AND shifts following tiles up/left):
-      --delete_rows START_ROW END_ROW
-      --delete_cols START_COL END_COL
-      Modifiers: --include_overlap, --row_range/--col_range, --cleanup_css, --force
-
-    Clear tiles (removes tiles but does NOT shift anything):
-      --clear_rows START_ROW END_ROW
-      --clear_cols START_COL END_COL
-      --clear_range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
-      Modifiers: --include_overlap, --cleanup_css, --force
-
-    Crop (remove everything OUTSIDE the kept range):
-      --crop_to_rows START_ROW END_ROW
-      --crop_to_cols START_COL END_COL
-      --crop_to_range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
-      Modifiers: --include_overlap, --cleanup_css, --force
-      Notes: the kept range must contain at least one tile; at least one tile must remain.
-
-    Prune (remove everything EXCEPT matching tiles):
-      --prune_except_ids <comma-separated tile ids>
-      --prune_except_devices <comma-separated device ids>
-      Modifiers: --cleanup_css, --force
-      Notes: at least one tile must match the provided ids/devices; at least one tile must remain.
+(Compatibility aliases: `container == minimal`, `list == bare`.)
 
 
-ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
-
-  Trim (performed after the layout action, before sorting):
-    --trim                 (same as --trim:top,left)
-    --trim:top
-    --trim:left
-    --trim:top,left
-
-  Sort (only applied if --sort is present; affects output order only):
-    --sort                 (same as --sort:irc)
-    --sort:<SPEC>
-
-    Keys: i=id, r=row, c=col
-    Default SPEC: irc
-    Prefix a key with '-' to sort that key descending (example: --sort:-i r c)
-    Missing keys are appended in i,r,c order (ascending)
-
-  Scrub orphan CSS (performed last, after sorting):
-    --scrub_css
-      Finds tile-specific CSS rules in customCSS that reference tile ids not present as tiles.
-      Prompts before removal unless --force is specified.
-      If --scrub_css is NOT specified and orphans are detected, the program warns how many were found.
+## How to use: 
+1. Select All and copy your dashboard's layout CSS to the clipboard.
+2. Run the desired action.  The changes will be saved back to the clipboard
+3. Paste the changed layout back into your dashboard or run additional actions.
+   Additional actions will be made on the layout currently in the clipboard allowing
+   you to chain a series of changes.
 
 
-MODIFIERS
+## Quick examples
 
-  Selection / overlap:
-    --include_overlap
-      Default selection: tiles are selected when their top-left (row,col) is inside the source/range.
-      With --include_overlap: tiles are also selected when their span intersects the source/range
-      (span uses rowSpan/colSpan; missing span defaults to 1x1).
+### Insert 12 columns at column 15 
+```bash
+python hubitat_tile_mover.py --insert_cols 12 15
+```
 
-  Insert/Delete range filters (limit which tiles are affected):
-    --col_range <start_col> <end_col>     (only with --insert_rows and --delete_rows)
-    --row_range <start_row> <end_row>     (only with --insert_cols and --delete_cols)
+### Move a block of columns to a new location
+```bash
+python hubitat_tile_mover.py --move_cols 1 30 65 --output_to:clipboard
+```
 
-  Destination conflict policy (move/copy/merge only):
-    --allow_overlap
-      Proceed even if destination conflicts exist.
-    --skip_overlap
-      Skip only the tiles that would conflict in the destination.
-    default (neither set):
-      Abort before changing anything if any destination conflicts exist.
+### Copy a range of tiles (duplicate) and allow destination overlap
+```bash
+python hubitat_tile_mover.py --copy_range 1 1 20 40 1 50 --allow_overlap
+```
 
-  Confirmation suppression:
-    --force
-      Skip interactive confirmations when tiles or CSS rules would be removed.
+### Merge tiles from another exported layout file
+```bash
+python hubitat_tile_mover.py --merge_source other.json --merge_cols 1 30 85
+```
 
+### Delete columns and also cleanup matching CSS rules (prompts unless --force)
+```bash
+python hubitat_tile_mover.py --delete_cols 85 100 --cleanup_css --force
+```
 
-CSS OPTIONS
+### Crop to a range (keep only that region)
+```bash
+python hubitat_tile_mover.py --crop_to_range 1 1 30 60
+```
 
-  --ignore_css
-      When copying/merging tiles, do not create/merge tile-specific CSS rules for new tile ids.
-
-  --cleanup_css
-      When tiles are removed (delete/clear/crop/prune), attempt to remove tile-specific CSS rules for those tile ids.
-      Prompts before removal unless --force is specified.
-
-  Tile id assignment when copying/merging:
-      New tile ids are assigned sequentially starting at:
-        1 + max(highest existing tile id, highest tile id referenced in customCSS)
-      This prevents newly created tiles from accidentally reusing ids that still have orphan CSS rules.
-
-
-FORMATTING
-
-  --indent N               Pretty JSON indent spaces per nesting level (N can be 0; default: 2)
-  --minify                 Compact one-line JSON (overrides --indent)
-  --newline keep|lf|crlf   Normalize output newlines
-
-
-DIAGNOSTICS
-
-  --quiet                  Suppress the final one-line summary
-  --verbose                Planned actions summary to STDERR
-  --debug                  Per-tile action logs to STDERR
-
->>>>>>> 4b0f8d4 (Initial commit)
+### Remove orphaned tile CSS rules
+```bash
+python hubitat_tile_mover.py --scrub_css
+```
 
