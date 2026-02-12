@@ -1,0 +1,248 @@
+from __future__ import annotations
+
+import copy
+from typing import Any, Dict, List, Optional, Set
+
+from .ops_move import scan_move_conflicts
+from .selectors import select_tiles_by_col_range, select_tiles_by_row_range, select_tiles_by_rect_range
+from .tiles import as_int, rect, set_int_like
+from .util import die, dlog, vlog
+
+def _next_id_state(dest_tiles: List[Dict[str, Any]], *, reserved_ids: Optional[Set[int]] = None) -> tuple[set[int], int]:
+    used = {as_int(t, "id") for t in dest_tiles}
+    if reserved_ids:
+        used |= {int(x) for x in reserved_ids}
+    next_id = (max(used) + 1) if used else 1
+    return used, next_id
+
+def _ensure_unique_id(tile: Dict[str, Any], used: set[int], next_id: int, debug: bool, label: str) -> int:
+    src_id = as_int(tile, "id")
+    if src_id not in used:
+        used.add(src_id)
+        return next_id
+
+    new_id = next_id
+    set_int_like(tile, "id", new_id)
+    used.add(new_id)
+    dlog(debug, f"[{label}] id conflict: source id={src_id} -> reassigned id={new_id}")
+    return next_id + 1
+
+def _conflict_scan_and_append(
+    dest_tiles: List[Dict[str, Any]],
+    *,
+    copies: List[Dict[str, Any]],
+    allow_overlap: bool,
+    skip_overlap: bool,
+    verbose: bool,
+    debug: bool,
+    label: str,
+) -> Set[int]:
+    stationary = dest_tiles  # tiles present before copy
+
+    def moved_rect(t: Dict[str, Any]):
+        return rect(t)
+
+    conflicts_by_mid, total_pairs = scan_move_conflicts(copies, stationary, moved_rect)
+    if conflicts_by_mid:
+        vlog(verbose, f"[{label}] conflicts detected: {len(conflicts_by_mid)} copied tiles, {total_pairs} overlap pair(s)")
+
+    if conflicts_by_mid and not allow_overlap and not skip_overlap:
+        sample = list(conflicts_by_mid.items())[:10]
+        details = "; ".join([f"copy id={mid} conflicts with {sids}" for mid, sids in sample])
+        more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
+        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
+
+    added = 0
+    appended_ids: Set[int] = set()
+    for ct in copies:
+        tid = as_int(ct, "id")
+        if conflicts_by_mid.get(tid) and skip_overlap and not allow_overlap:
+            dlog(debug, f"[{label}] id={tid}: SKIP COPY (conflicts with {conflicts_by_mid[tid]})")
+            continue
+        dest_tiles.append(ct)
+        appended_ids.add(tid)
+        added += 1
+
+    vlog(verbose, f"[{label}] appended {added} copied tile(s)")
+
+    return appended_ids
+
+def copy_cols(
+    dest_tiles: List[Dict[str, Any]],
+    *,
+    start_col: int,
+    end_col: int,
+    dest_start_col: int,
+    include_overlap: bool,
+    allow_overlap: bool,
+    skip_overlap: bool,
+    verbose: bool,
+    debug: bool,
+    reserved_ids: Optional[Set[int]] = None,
+) -> Dict[int, int]:
+    if start_col <= 0 or end_col <= 0 or dest_start_col <= 0:
+        die("--copy_cols values must be positive (1-based).")
+    if start_col > end_col:
+        start_col, end_col = end_col, start_col
+
+    delta = dest_start_col - start_col
+
+    selected = select_tiles_by_col_range(dest_tiles, start_col, end_col, include_overlap=include_overlap)
+    vlog(verbose, f"[copy_cols] selected {len(selected)} tile(s) from input (include_overlap={include_overlap})")
+
+    used_ids, next_id = _next_id_state(dest_tiles, reserved_ids=reserved_ids)
+
+    id_map: Dict[int, int] = {}
+
+    copies: List[Dict[str, Any]] = []
+    for t in selected:
+        src_id = as_int(t, "id")
+        ct = copy.deepcopy(t)
+        next_id = _ensure_unique_id(ct, used_ids, next_id, debug, "copy_cols")
+
+        tid = as_int(ct, "id")
+        id_map[src_id] = tid
+        c0 = as_int(ct, "col")
+        c1 = c0 + delta
+        if c1 < 1:
+            die(f"copy_cols would move copied tile id={tid} to invalid col {c1}")
+        set_int_like(ct, "col", c1)
+        copies.append(ct)
+        dlog(debug, f"[copy_cols] copy id={tid}: col {c0} -> {c1}")
+
+    appended_ids = _conflict_scan_and_append(
+        dest_tiles,
+        copies=copies,
+        allow_overlap=allow_overlap,
+        skip_overlap=skip_overlap,
+        verbose=verbose,
+        debug=debug,
+        label="copy_cols",
+    )
+
+    return {k: v for k, v in id_map.items() if v in appended_ids}
+
+def copy_rows(
+    dest_tiles: List[Dict[str, Any]],
+    *,
+    start_row: int,
+    end_row: int,
+    dest_start_row: int,
+    include_overlap: bool,
+    allow_overlap: bool,
+    skip_overlap: bool,
+    verbose: bool,
+    debug: bool,
+    reserved_ids: Optional[Set[int]] = None,
+) -> Dict[int, int]:
+    if start_row <= 0 or end_row <= 0 or dest_start_row <= 0:
+        die("--copy_rows values must be positive (1-based).")
+    if start_row > end_row:
+        start_row, end_row = end_row, start_row
+
+    delta = dest_start_row - start_row
+
+    selected = select_tiles_by_row_range(dest_tiles, start_row, end_row, include_overlap=include_overlap)
+    vlog(verbose, f"[copy_rows] selected {len(selected)} tile(s) from input (include_overlap={include_overlap})")
+
+    used_ids, next_id = _next_id_state(dest_tiles, reserved_ids=reserved_ids)
+
+    id_map: Dict[int, int] = {}
+
+    copies: List[Dict[str, Any]] = []
+    for t in selected:
+        src_id = as_int(t, "id")
+        ct = copy.deepcopy(t)
+        next_id = _ensure_unique_id(ct, used_ids, next_id, debug, "copy_rows")
+
+        tid = as_int(ct, "id")
+        id_map[src_id] = tid
+        r0 = as_int(ct, "row")
+        r1 = r0 + delta
+        if r1 < 1:
+            die(f"copy_rows would move copied tile id={tid} to invalid row {r1}")
+        set_int_like(ct, "row", r1)
+        copies.append(ct)
+        dlog(debug, f"[copy_rows] copy id={tid}: row {r0} -> {r1}")
+
+    appended_ids = _conflict_scan_and_append(
+        dest_tiles,
+        copies=copies,
+        allow_overlap=allow_overlap,
+        skip_overlap=skip_overlap,
+        verbose=verbose,
+        debug=debug,
+        label="copy_rows",
+    )
+
+    return {k: v for k, v in id_map.items() if v in appended_ids}
+
+def copy_range(
+    dest_tiles: List[Dict[str, Any]],
+    *,
+    src_top_row: int,
+    src_left_col: int,
+    src_bottom_row: int,
+    src_right_col: int,
+    dest_top_row: int,
+    dest_left_col: int,
+    include_overlap: bool,
+    allow_overlap: bool,
+    skip_overlap: bool,
+    verbose: bool,
+    debug: bool,
+    reserved_ids: Optional[Set[int]] = None,
+) -> Dict[int, int]:
+    if min(src_top_row, src_left_col, src_bottom_row, src_right_col, dest_top_row, dest_left_col) <= 0:
+        die("--copy_range values must be positive (1-based).")
+
+    top_row, bottom_row = (src_top_row, src_bottom_row) if src_top_row <= src_bottom_row else (src_bottom_row, src_top_row)
+    left_col, right_col = (src_left_col, src_right_col) if src_left_col <= src_right_col else (src_right_col, src_left_col)
+
+    delta_r = dest_top_row - top_row
+    delta_c = dest_left_col - left_col
+
+    selected = select_tiles_by_rect_range(
+        dest_tiles,
+        top_row=top_row,
+        left_col=left_col,
+        bottom_row=bottom_row,
+        right_col=right_col,
+        include_overlap=include_overlap,
+    )
+    vlog(verbose, f"[copy_range] selected {len(selected)} tile(s) from input (include_overlap={include_overlap})")
+
+    used_ids, next_id = _next_id_state(dest_tiles, reserved_ids=reserved_ids)
+
+    id_map: Dict[int, int] = {}
+
+    copies: List[Dict[str, Any]] = []
+    for t in selected:
+        src_id = as_int(t, "id")
+        ct = copy.deepcopy(t)
+        next_id = _ensure_unique_id(ct, used_ids, next_id, debug, "copy_range")
+
+        tid = as_int(ct, "id")
+        id_map[src_id] = tid
+        r0 = as_int(ct, "row")
+        c0 = as_int(ct, "col")
+        r1 = r0 + delta_r
+        c1 = c0 + delta_c
+        if r1 < 1 or c1 < 1:
+            die(f"copy_range would move copied tile id={tid} to invalid position row={r1}, col={c1}")
+        set_int_like(ct, "row", r1)
+        set_int_like(ct, "col", c1)
+        copies.append(ct)
+        dlog(debug, f"[copy_range] copy id={tid}: (row,col) ({r0},{c0}) -> ({r1},{c1})")
+
+    appended_ids = _conflict_scan_and_append(
+        dest_tiles,
+        copies=copies,
+        allow_overlap=allow_overlap,
+        skip_overlap=skip_overlap,
+        verbose=verbose,
+        debug=debug,
+        label="copy_range",
+    )
+
+    return {k: v for k, v in id_map.items() if v in appended_ids}
