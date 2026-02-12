@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # hubitat tile mover
+=======
+Hubitat Tile Mover � adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
+>>>>>>> b202d7e (update readme.md)
 
 Command-line tool to bulk-edit Hubitat Dashboard layout JSON by operating on the `tiles` list (row/col only) while preserving all other JSON fields unchanged.
 
@@ -113,8 +117,62 @@ python hubitat_tile_mover.py --delete_cols 85 100 --cleanup_css --force
 python hubitat_tile_mover.py --crop_to_range 1 1 30 60
 ```
 
+<<<<<<< HEAD
 ### Remove orphaned tile CSS rules
 ```bash
 python hubitat_tile_mover.py --scrub_css
 ```
+=======
+  Selection / overlap:
+    --include_overlap
+      Default selection: tiles are selected when their top-left (row,col) is inside the source/range.
+      With --include_overlap: tiles are also selected when their span intersects the source/range
+      (span uses rowSpan/colSpan; missing span defaults to 1x1).
+
+  Insert/Delete range filters (limit which tiles are affected):
+    --col_range <start_col> <end_col>     (only with --insert_rows and --delete_rows)
+    --row_range <start_row> <end_row>     (only with --insert_cols and --delete_cols)
+
+  Destination conflict policy (move/copy/merge only):
+    --allow_overlap
+      Proceed even if destination conflicts exist.
+    --skip_overlap
+      Skip only the tiles that would conflict in the destination.
+    default (neither set):
+      Abort before changing anything if any destination conflicts exist.
+
+  Confirmation suppression:
+    --force
+      Skip interactive confirmations when tiles or CSS rules would be removed.
+
+
+CSS OPTIONS
+
+  --ignore_css
+      When copying/merging tiles, do not create/merge tile-specific CSS rules for new tile ids.
+
+  --cleanup_css
+      When tiles are removed (delete/clear/crop/prune), attempt to remove tile-specific CSS rules for those tile ids.
+      Prompts before removal unless --force is specified.
+
+  Tile id assignment when copying/merging:
+      New tile ids are assigned sequentially starting at:
+        1 + max(highest existing tile id, highest tile id referenced in customCSS)
+      This prevents newly created tiles from accidentally reusing ids that still have orphan CSS rules.
+
+
+FORMATTING
+
+  --indent N               Pretty JSON indent spaces per nesting level (N can be 0; default: 2)
+  --minify                 Compact one-line JSON (overrides --indent)
+  --newline keep|lf|crlf   Normalize output newlines
+
+
+DIAGNOSTICS
+
+  --quiet                  Suppress the final one-line summary
+  --verbose                Planned actions summary to STDERR
+  --debug                  Per-tile action logs to STDERR
+
+>>>>>>> b202d7e (update readme.md)
 
