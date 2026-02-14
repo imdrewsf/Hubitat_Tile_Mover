@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 from typing import Dict, List, Optional, Tuple
 
 from .cli import build_parser
+from .hubio import hub_import_layout, hub_post_layout_with_refresh
 from .io_helpers import (
     assert_singleton_flags,
     normalize_argv,
@@ -30,7 +32,7 @@ from .css_ops import (
     set_custom_css,
     tile_ids_in_css,
 )
-from .util import die, vlog
+from .util import die, vlog, ok, wlog, prompt_yes_no
 
 
 def _parse_inclusive_range(name: str, pair: Optional[List[int]]) -> Optional[Tuple[int, int]]:
@@ -87,6 +89,59 @@ def _parse_trim_modes(trim_value: Optional[str], legacy_left: bool, legacy_top: 
     return (do_left, do_top)
 
 
+
+def _backup_path_for_url(dashboard_url: str) -> str:
+    """Backup filename derived from host + dashboard id (stored in CWD)."""
+    import re
+    import urllib.parse
+    u = urllib.parse.urlparse(dashboard_url)
+    host = (u.hostname or "hub").replace(":", "_")
+    m = re.search(r"/dashboard/(\d+)", u.path)
+    dash = m.group(1) if m else "dashboard"
+    return f"hubitat_tile_mover_backup_{host}_{dash}.json"
+
+def _write_backup(path: str, obj: object) -> None:
+    import json
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2, ensure_ascii=False)
+
+def _read_backup(path: str) -> object:
+    import json
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_temp_merge_source(obj: object) -> str:
+    """Write a temporary JSON file for merge_url imports; returns filename."""
+    import json
+    import tempfile
+    fd, path = tempfile.mkstemp(prefix="hubitat_tile_mover_merge_", suffix=".json")
+    # mkstemp returns an OS-level fd; wrap it in a file object
+    with open(fd, "w", encoding="utf-8") as f:  # type: ignore[arg-type]
+        json.dump(obj, f, indent=2, ensure_ascii=False)
+    return path
+
+
+def _state_path() -> str:
+    return "hubitat_tile_mover_last_run.json"
+
+def _write_state(state: dict) -> None:
+    import json
+    with open(_state_path(), "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
+
+def _read_state() -> dict:
+    import json
+    with open(_state_path(), "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def kind_to_default_output_format(kind: str) -> str:
+    if kind == "full_object":
+        return "full"
+    if kind == "minimal_container":
+        return "minimal"
+    return "bare"
+
 def main(argv: Optional[List[str]] = None) -> None:
     import sys as _sys
 
@@ -108,6 +163,68 @@ def main(argv: Optional[List[str]] = None) -> None:
     import_kind, import_path = parse_import_spec(args.import_spec)
     outputs = parse_output_to_specs(args.output_to)
 
+    # --undo_last is a standalone restore action.
+    # It restores the previous backup and writes it to the last output destinations unless --output/--output_to is provided.
+    if args.undo_last:
+        forbidden = [
+            args.insert_rows, args.insert_cols, args.move_cols, args.move_rows, args.move_range,
+            args.delete_rows, args.delete_cols, args.clear_rows, args.clear_cols, args.clear_range,
+            args.crop_to_rows, args.crop_to_cols, args.crop_to_range,
+            args.prune_except_ids, args.prune_except_devices,
+            args.copy_cols, args.copy_rows, args.copy_range,
+            args.merge_cols, args.merge_rows, args.merge_range,
+            args.trim, args.sort, args.scrub_css,
+        ]
+        if any(x for x in forbidden if x):
+            die("--undo_last cannot be combined with other actions. Use -h for help.")
+
+        if not os.path.exists(_state_path()):
+            die("No last-run state found; nothing to undo.")
+        st = _read_state()
+
+        backup_path = st.get("backup_path")
+        if not backup_path or not os.path.exists(backup_path):
+            die("Backup file not found; nothing to undo.")
+
+        obj = _read_backup(backup_path)
+        kind, full_container, tiles_any = extract_tiles_container(obj, verbose=args.verbose, debug=args.debug)
+        from .jsonio import normalize_tiles_list as _ntl
+        tiles = _ntl(tiles_any, verbose=args.verbose, debug=args.debug)
+
+        # Default outputs to last outputs, unless user provided outputs this run
+        outputs = parse_output_to_specs(args.output_to) if args.output_to else st.get("last_outputs", [("clipboard", None)])
+        url = args.url or st.get("last_url")
+        using_hub_output = any((k == "hub") for (k, _) in outputs)
+        if using_hub_output and not url:
+            die("Undo restore requires --url (or a prior hub run with stored URL) when outputting to hub.")
+
+        # Output format: for hub output force FULL; otherwise default to kind unless user explicitly requested.
+        output_format = args.output_format or st.get("last_output_format") or kind_to_default_output_format(kind)
+        if using_hub_output:
+            if kind != "full_object":
+                die("Cannot restore to hub because the backup is not FULL dashboard JSON.")
+            output_format = "full"
+
+        out_obj = build_output_object(kind, full_container, tiles, output_format)
+        out_text = dump_json(out_obj, indent=args.indent, minify=args.minify)
+        if not out_text.endswith("\n"):
+            out_text += "\n"
+        non_hub = [(k, p) for (k, p) in outputs if k != "hub"]
+        write_outputs(non_hub, args.newline, out_text)
+        if using_hub_output:
+            hub_ctx, _tmp = hub_import_layout(url, verbose=args.verbose, debug=args.debug)
+            hub_post_layout_with_refresh(url, hub_ctx.layout_url, out_obj, verbose=args.verbose, debug=args.debug)
+
+        dests = ", ".join([(k if k != "file" else f"file:{p}") for (k, p) in outputs])
+        from .util import ok as _ok
+        import sys as _sys
+        print(f"{_ok('OK:')} undo applied. Output written to {dests}.", file=_sys.stderr)
+        return
+
+
+    using_hub_import = (import_kind == "hub")
+    using_hub_output = any(k == "hub" for (k, _p) in outputs)
+
     # Determine if any operation was requested
     do_left, do_top = _parse_trim_modes(args.trim, getattr(args, "trim_left", False), getattr(args, "trim_top", False))
     has_trim = bool(do_left or do_top)
@@ -116,6 +233,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     cleared_ids: list[int] = []
     created_id_map: dict[int, int] = {}
     merge_css_source_path: str = ""
+    merge_source_path: str = args.merge_source or ""
+    if (args.merge_cols or args.merge_rows or args.merge_range) and args.merge_url:
+        _, mobj = hub_import_layout(args.merge_url, verbose=args.verbose, debug=args.debug)
+        merge_source_path = _write_temp_merge_source(mobj)
+        merge_css_source_path = merge_source_path
+
 
     has_movement = bool(
         args.insert_rows
@@ -159,9 +282,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     # --force is allowed for any action that would otherwise prompt for confirmation.
 
     # Validate merge usage
-    if (args.merge_cols or args.merge_rows or args.merge_range) and not args.merge_source:
-        die("--merge_source <filename> is required when using --merge_cols/--merge_rows/--merge_range.")
-
+    if (args.merge_cols or args.merge_rows or args.merge_range):
+        if bool(args.merge_source) == bool(args.merge_url):
+            die("For merge operations, specify exactly one of --merge_source <filename> or --merge_url <dashboard_url>.")
     col_range = _parse_inclusive_range("--col_range", args.col_range)
     row_range = _parse_inclusive_range("--row_range", args.row_range)
 
@@ -187,13 +310,34 @@ def main(argv: Optional[List[str]] = None) -> None:
             vlog(True, "Sort: disabled")
         if args.merge_source:
             vlog(True, f"Merge source: {args.merge_source}")
+        if getattr(args, 'merge_url', None):
+            vlog(True, f"Merge URL: {args.merge_url}")
         vlog(True, f"Debug per-tile: {bool(args.debug)}")
         vlog(True, "====================================")
-
-    raw = read_input_text(import_kind, import_path)
-    obj = load_json_from_text(raw, verbose=args.verbose, debug=args.debug)
-
+    backup_path = None
+    backup_obj = None
+    backup_tmp_path = None
+    # Backup is required for hub output and for --confirm_keep (and for hub import, as a restore point).
+    if args.url and (using_hub_import or using_hub_output or args.confirm_keep) and (not args.undo_last):
+        backup_path = _backup_path_for_url(args.url)
+        if args.lock_backup and os.path.exists(backup_path):
+            # Use existing backup as the restore point and do not overwrite it.
+            backup_obj = _read_backup(backup_path)
+        else:
+            # Write to a temporary file; only commit if the run completes successfully.
+            import tempfile
+            fd, backup_tmp_path = tempfile.mkstemp(prefix="hubitat_tile_mover_backup_", suffix=".json")
+            os.close(fd)
+            _write_backup(backup_tmp_path, obj)
+            backup_obj = obj
     kind, full_container, tiles_any = extract_tiles_container(obj, verbose=args.verbose, debug=args.debug)
+    if using_hub_output and kind != "full_object":
+        die("--output:hub requires FULL layout JSON input (cannot use minimal/bare).")
+    if using_hub_output:
+        if kind != "full_object":
+            die("--output:hub requires FULL dashboard JSON input.")
+        if args.output_format in ("minimal", "bare", "container", "list"):
+            die("--output:hub cannot be used with --output_format:minimal or --output_format:bare.")
     verify_tiles_minimum(tiles_any)
     tiles: List[Dict] = tiles_any  # type: ignore[assignment]
 
@@ -324,7 +468,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         s, e, d = args.merge_cols
         created_id_map = merge_cols(
             tiles,
-            merge_source_path=args.merge_source,
+            merge_source_path=merge_source_path,
             start_col=s,
             end_col=e,
             dest_start_col=d,
@@ -335,14 +479,14 @@ def main(argv: Optional[List[str]] = None) -> None:
             debug=args.debug,
             reserved_ids=reserved_css_ids,
         )
-        merge_css_source_path = args.merge_source
+        merge_css_source_path = merge_source_path
 
 
     elif args.merge_rows:
         s, e, d = args.merge_rows
         created_id_map = merge_rows(
             tiles,
-            merge_source_path=args.merge_source,
+            merge_source_path=merge_source_path,
             start_row=s,
             end_row=e,
             dest_start_row=d,
@@ -353,14 +497,14 @@ def main(argv: Optional[List[str]] = None) -> None:
             debug=args.debug,
             reserved_ids=reserved_css_ids,
         )
-        merge_css_source_path = args.merge_source
+        merge_css_source_path = merge_source_path
 
 
     elif args.merge_range:
         r1, c1, r2, c2, dr, dc = args.merge_range
         created_id_map = merge_range(
             tiles,
-            merge_source_path=args.merge_source,
+            merge_source_path=merge_source_path,
             src_top_row=r1,
             src_left_col=c1,
             src_bottom_row=r2,
@@ -374,7 +518,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             debug=args.debug,
             reserved_ids=reserved_css_ids,
         )
-        merge_css_source_path = args.merge_source
+        merge_css_source_path = merge_source_path
 
 
     elif args.delete_rows:
@@ -447,6 +591,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
+        debug=args.debug,
         )
 
     elif args.crop_to_cols:
@@ -458,6 +603,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
+        debug=args.debug,
         )
 
     elif args.crop_to_range:
@@ -471,6 +617,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
+        debug=args.debug,
         )
 
     elif args.prune_except_ids:
@@ -563,15 +710,69 @@ def main(argv: Optional[List[str]] = None) -> None:
     if not out_text.endswith("\n"):
         out_text += "\n"
 
-    write_outputs(outputs, args.newline, out_text)
+    non_hub_outputs = [(k, p) for (k, p) in outputs if k != 'hub']
+    write_outputs(non_hub_outputs, args.newline, out_text)
+
+    posted = False
+    post_url_used = ''
+    if using_hub_output:
+        if hub_ctx is None:
+            hub_ctx, _tmp = hub_import_layout(args.url, verbose=False, debug=False)
+        post_url_used = hub_post_layout_with_refresh(args.url, hub_ctx.layout_url, output_obj, verbose=args.verbose, debug=args.debug)
+        posted = True
+
+    # confirm/undo (if user chooses undo, also re-post to hub if requested)
+    did_undo = False
+    if args.confirm_keep and (backup_obj is not None) and (not args.undo_last):
+        keep = prompt_yes_no(args.force, 'Keep these changes?', default_yes=True)
+        if not keep:
+            did_undo = True
+            output_obj = backup_obj
+
+            # Re-output the original (backup) JSON, not the modified tiles.
+            b_kind, b_full_container, b_tiles_any = extract_tiles_container(backup_obj, verbose=args.verbose, debug=args.debug)
+            verify_tiles_minimum(b_tiles_any)
+            b_tiles = b_tiles_any  # type: ignore[assignment]
+            undo_obj = build_output_object(b_kind, b_full_container, b_tiles, args.output_format)
+            output_obj = undo_obj
+            out_text2 = dump_json(undo_obj, indent=args.indent, minify=args.minify)
+            if not out_text2.endswith("\n"):
+                out_text2 += "\n"
+
+            write_outputs(non_hub_outputs, args.newline, out_text2)
+            if using_hub_output:
+                if hub_ctx is None:
+                    hub_ctx, _tmp = hub_import_layout(args.url, verbose=False, debug=False)
+                post_url_used = hub_post_layout_with_refresh(args.url, hub_ctx.layout_url, output_obj, verbose=args.verbose, debug=args.debug)
+                posted = True
+
 
     if not args.quiet:
         from .util import ok
         import sys
 
-        dests = ", ".join([f"{k}" if k != "file" else f"file:{p}" for k, p in outputs])
+        dests =  ", ".join([f"{k}" if k != "file" else f"file:{p}" for k, p in outputs])
         sort_msg = f"sorted ({args.sort})" if args.sort is not None else "original order"
-        print(
-            f"{ok('OK:')} {len(final_tiles)} tile(s) written to {dests} ({sort_msg}).",
-            file=sys.stderr,
-        )
+        status_bits = []
+        if args.undo_last:
+            status_bits.append('undo applied')
+        if posted:
+            status_bits.append('saved to hub')
+        if did_undo:
+            status_bits.append('then undone')
+        status = '; '.join(status_bits) if status_bits else 'completed'
+        # Commit backup (atomic) and persist last-run state for --undo_last defaults.
+        try:
+            # If we created a new backup this run, commit it only after all outputs (and hub POST) succeeded.
+            if backup_tmp_path and backup_path and (not (args.lock_backup and os.path.exists(backup_path))):
+                os.replace(backup_tmp_path, backup_path)
+            _write_state({
+                "backup_path": backup_path,
+                "last_outputs": outputs,
+                "last_url": args.url,
+                "last_output_format": args.output_format,
+            })
+        except Exception:
+            pass
+
+        print(f"{ok('OK:')} {status}. {len(final_tiles)} tile(s) written to {dests} ({sort_msg}).", file=sys.stderr)

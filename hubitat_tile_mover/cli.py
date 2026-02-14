@@ -3,39 +3,73 @@ from __future__ import annotations
 import argparse
 import sys
 
-SHORT_HELP = r"""hubitat_tile_mover: adjust a Hubitat Dashboard "tiles" layout JSON (row/col only), preserving everything else.
+SHORT_HELP = r'''Adjust and/or edit the "tiles" list in a Hubitat Dashboard layout JSON while preserving everything else unchanged.
 
-Input:
-  --import:clipboard (default) | --import:file <filename>
+Input JSON shapes:
+  Full:    { ..., "tiles": [ {...}, ... ], ... }
+  Minimal: { "tiles": [ {...}, ... ] }
+  Bare:    [ {...}, ... ]
 
-Output (repeatable; default: clipboard):
-  --output_to:clipboard | --output_to:terminal | --output_to:file <filename>
+Import (one; default is clipboard):
+  --import:clipboard
+  --import:file <filename>
+  --import:hub                      (requires --url <dashboard_url>)
 
-Output format (defaults to input level; cannot exceed input):
-  --output_format:full | --output_format:minimal | --output_format:bare
+Output destinations (repeatable; default is clipboard if none specified):
+  --output:terminal
+  --output:clipboard
+  --output:file <filename>
+  --output:hub                      (requires --url; FULL input only)
 
-Actions (choose at most ONE):
-  Insert:  --insert_rows COUNT AT_ROW | --insert_cols COUNT AT_COL
-  Move:    --move_cols ... | --move_rows ... | --move_range ...
-  Copy:    --copy_cols ... | --copy_rows ... | --copy_range ...
-  Merge:   --merge_source <file> + --merge_cols/rows/range ...
-  Remove:  --delete_rows/cols | --clear_rows/cols/range
-  Crop:    --crop_to_rows/cols/range
-  Prune:   --prune_except_ids ... | --prune_except_devices ...
+Output format (optional; default matches input):
+  --output_format:full | minimal | bare
 
-Optional post-actions (can be used alone or with an action):
-  --trim[:top|left|top,left]
-  --sort[:SPEC]
-  --scrub_css
+Actions (at most ONE per run):
+  Insert:  --insert_rows COUNT AT_ROW
+           --insert_cols COUNT AT_COL
+  Move:    --move_cols START END DEST
+           --move_rows START END DEST
+           --move_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+  Delete:  --delete_rows START END
+           --delete_cols START END
+  Clear:   --clear_rows START END
+           --clear_cols START END
+           --clear_range TOP LEFT BOTTOM RIGHT
+  Crop:    --crop_to_rows START END
+           --crop_to_cols START END
+           --crop_to_range TOP LEFT BOTTOM RIGHT
+  Prune:   --prune_except_ids <id1,id2,...>
+           --prune_except_devices <dev1,dev2,...>
+  Copy:    --copy_cols START END DEST
+           --copy_rows START END DEST
+           --copy_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+  Merge:   --merge_cols START END DEST
+           --merge_rows START END DEST
+           --merge_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+           --merge_source <filename> OR --merge_url <dashboard_url>
 
-Common modifiers:
-  --include_overlap    select by span intersection (not just top-left)
-  --allow_overlap | --skip_overlap   (move/copy/merge destination conflicts)
-  --force              skip confirmations
+Optional follow-up actions:
+  --trim[:top|left|top,left]        (runs after movement, before sort)
+  --sort[:<keys>]                   (runs last; default keys are irc)
+  --scrub_css                       (runs last; can run alone)
 
-More details:
+Modifiers:
+  --include_overlap
+  --row_range <start> <end>         (insert_cols only)
+  --col_range <start> <end>         (insert_rows only)
+  --allow_overlap / --skip_overlap  (move/copy/merge)
+  --force                           (skip confirmation prompts)
+  --cleanup_css                     (remove tile-specific CSS for deleted/cleared/cropped/pruned tiles)
+  --ignore_css                      (do not copy/create CSS for copy/merge)
+
+Hubitat direct mode:
+  --url <dashboard_url>
+  --undo_last                       (standalone; restores backup to last output unless --output is provided)
+  --confirm_keep                    (prompt to keep; if not, restore backup)
+
+More help:
   --help_full
-"""
+'''
 
 FULL_HELP = r"""hubitat_tile_mover — adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
 
@@ -47,11 +81,13 @@ Accepted input JSON shapes (3 levels):
 Import (input) (only one; default is clipboard):
   --import:clipboard
   --import:file <filename>
+  --import:hub              (requires --url)
 
 Output destinations (repeatable; default is clipboard if none specified):
-  --output_to:terminal
-  --output_to:clipboard
-  --output_to:file <filename>
+  --output:terminal
+  --output:clipboard
+  --output:file <filename>
+  --output:hub           (requires --url; full JSON only)
 
 Output format (single choice; default matches the input level; cannot exceed input):
   --output_format:full       (Full dashboard JSON)
@@ -61,6 +97,12 @@ Output format (single choice; default matches the input level; cannot exceed inp
   Compatibility aliases (accepted):
     --output_format:container  == minimal
     --output_format:list       == bare
+
+Hubitat direct mode (optional):
+  --url <dashboard_url>     (required for --import:hub and/or --output:hub)
+  --undo_last               (restore from the last backup and write to outputs)
+  --confirm_keep            (after writing changed output(s), prompt to keep; if not, restore backup)
+  --lock_backup             (do not overwrite existing backup; reuse as restore point)
 
 
 LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
@@ -88,6 +130,7 @@ LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
 
     Merge / import tiles from another layout:
       --merge_source <filename>
+      --merge_url <dashboard_url>
       --merge_cols START_COL END_COL DEST_START_COL
       --merge_rows START_ROW END_ROW DEST_START_ROW
       --merge_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
@@ -229,6 +272,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Keep argument groups for internal structure (even though custom help is printed).
     io_grp = p.add_argument_group("Import / Output")
+    # User-facing convenience switches (these appear in -h via SHORT_HELP / FULL_HELP)
+    imp_vis = io_grp.add_mutually_exclusive_group(required=False)
+    imp_vis.add_argument('--import:clipboard', dest='import_spec', action='store_const', const=('clipboard', None), help='Read JSON from clipboard (default).')
+    imp_vis.add_argument('--import:file', dest='import_spec', nargs=1, metavar='FILENAME', help='Read JSON from file.')
+    imp_vis.add_argument('--import:hub', dest='import_spec', action='store_const', const=('hub', None), help='Read layout JSON from Hubitat (requires --url).')
+
+    out_vis = io_grp.add_argument_group('Output destinations')
+    out_vis.add_argument('--output:terminal', dest='output_to', action='append_const', const=('terminal', None), help='Write JSON to terminal. Repeatable.')
+    out_vis.add_argument('--output:clipboard', dest='output_to', action='append_const', const=('clipboard', None), help='Write JSON to clipboard. Repeatable.')
+    out_vis.add_argument('--output:file', dest='output_to', action='append', nargs=1, metavar='FILENAME', help='Write JSON to file. Repeatable.')
+    out_vis.add_argument('--output:hub', dest='output_to', action='append_const', const=('hub', None), help='POST resulting FULL layout JSON back to Hubitat (requires --url).')
+
+    io_grp.add_argument("--url", dest="url", metavar="DASHBOARD_URL", type=str, default=None, help="Local Hubitat dashboard URL (required for --import:hub and/or --output:hub).")
+    io_grp.add_argument("--merge_url", "--merge-url", dest="merge_url", metavar="DASHBOARD_URL", type=str, default=None, help="Read tiles from another Hubitat dashboard URL for merge_* operations.")
+    io_grp.add_argument("--undo_last", dest="undo_last", action="store_true", help="Restore from the last backup (writes to requested outputs).")
+    io_grp.add_argument("--confirm_keep", dest="confirm_keep", action="store_true", help="After writing changed output(s), prompt to keep; if not, restore backup to the same outputs.")
+    io_grp.add_argument("--lock_backup", dest="lock_backup", action="store_true", help="Do not overwrite an existing backup; reuse it as the restore point.")
+
     io_grp.add_argument(
         "--import",
         dest="import_spec",
@@ -240,6 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     io_grp.add_argument(
         "--output_to",
         "--output-to",
+        "--output",
         action="append",
         nargs="+",
         metavar=("DEST", "ARG"),

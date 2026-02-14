@@ -48,6 +48,7 @@ def crop_to_rows(
     include_overlap: bool,
     force: bool,
     verbose: bool,
+    debug: bool,
 ) -> List[int]:
     if start_row <= 0 or end_row <= 0:
         _die("--crop_to_rows values must be positive (1-based).")
@@ -86,7 +87,7 @@ def crop_to_rows(
             f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
         )
 
-    _warn_and_prompt(force, f"crop_to_rows {start_row}..{end_row}", removed_ids, extra_warning=extra, verbose=verbose, debug=False)
+    _warn_and_prompt(force, f"crop_to_rows {start_row}..{end_row}", removed_ids, extra_warning=extra, verbose=verbose, debug=debug)
     tiles[:] = keep
     vlog(verbose, f"[crop_to_rows] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
@@ -100,6 +101,7 @@ def crop_to_cols(
     include_overlap: bool,
     force: bool,
     verbose: bool,
+    debug: bool,
 ) -> List[int]:
     if start_col <= 0 or end_col <= 0:
         _die("--crop_to_cols values must be positive (1-based).")
@@ -135,7 +137,7 @@ def crop_to_cols(
             f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
         )
 
-    _warn_and_prompt(force, f"crop_to_cols {start_col}..{end_col}", removed_ids, extra_warning=extra, verbose=verbose, debug=False)
+    _warn_and_prompt(force, f"crop_to_cols {start_col}..{end_col}", removed_ids, extra_warning=extra, verbose=verbose, debug=debug)
     tiles[:] = keep
     vlog(verbose, f"[crop_to_cols] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
@@ -151,6 +153,7 @@ def crop_to_range(
     include_overlap: bool,
     force: bool,
     verbose: bool,
+    debug: bool,
 ) -> List[int]:
     if min(top_row, left_col, bottom_row, right_col) <= 0:
         _die("--crop_to_range values must be positive (1-based).")
@@ -189,7 +192,7 @@ def crop_to_range(
             f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
         )
 
-    _warn_and_prompt(force, f"crop_to_range {top_row},{left_col}..{bottom_row},{right_col}", removed_ids, extra_warning=extra)
+    _warn_and_prompt(force, f"crop_to_range {top_row},{left_col}..{bottom_row},{right_col}", removed_ids, extra_warning=extra, verbose=verbose, debug=debug)
     tiles[:] = keep
     vlog(verbose, f"[crop_to_range] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
@@ -226,7 +229,7 @@ def prune_except_ids(
     if not keep:
         _die("prune_except_ids: no tiles matched the provided id list (at least one tile must remain).")
     removed_ids = [as_int(t, "id") for t in removed]
-    _warn_and_prompt(force, f"prune_except_ids {ids_csv}", removed_ids)
+    _warn_and_prompt(force, f"prune_except_ids {ids_csv}", removed_ids, verbose=verbose, debug=debug)
     tiles[:] = keep
     vlog(verbose, f"[prune_except_ids] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
@@ -255,7 +258,7 @@ def prune_except_devices(
     if not keep:
         _die("prune_except_devices: no tiles matched the provided device list (at least one tile must remain).")
     removed_ids = [as_int(t, "id") for t in removed]
-    _warn_and_prompt(force, f"prune_except_devices {devices_csv}", removed_ids)
+    _warn_and_prompt(force, f"prune_except_devices {devices_csv}", removed_ids, verbose=verbose, debug=debug)
     tiles[:] = keep
     vlog(verbose, f"[prune_except_devices] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids

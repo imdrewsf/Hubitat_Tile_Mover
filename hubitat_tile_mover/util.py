@@ -87,3 +87,20 @@ def prompt_yes_no_or_die(
         die(f"This operation will remove {what}. Re-run with --force to proceed (no input available).")
     if ans not in ("y", "yes"):
         raise SystemExit(1)
+
+
+def prompt_yes_no(force: bool, prompt: str, *, default_yes: bool = False) -> bool:
+    """Return True/False. If force is True, returns default_yes."""
+    if force:
+        return default_yes
+    try:
+        ans = input(f"{prompt} [{'Y/n' if default_yes else 'y/N'}]: ").strip().lower()
+    except EOFError:
+        return default_yes
+    if not ans:
+        return default_yes
+    if ans in ("y", "yes"):
+        return True
+    if ans in ("n", "no"):
+        return False
+    return default_yes

@@ -49,6 +49,24 @@ def extract_tiles_container(obj: Any, *, verbose: bool = False, debug: bool = Fa
     return ("full_object", obj, [])  # unreachable
 
 
+def normalize_tiles_list(tiles_any: Any, *, verbose: bool = False, debug: bool = False) -> List[dict]:
+    """Validate and normalize tiles list. Ensures at least one tile has id/row/col."""
+    if not isinstance(tiles_any, list):
+        die("'tiles' must be a list.")
+    if len(tiles_any) == 0:
+        die("'tiles' list is empty.")
+    tiles: List[dict] = []
+    saw_valid = False
+    for i, t in enumerate(tiles_any):
+        if not isinstance(t, dict):
+            die(f"Tile at index {i} is not an object.")
+        tiles.append(t)
+        if ("id" in t) and ("row" in t) and ("col" in t):
+            saw_valid = True
+    if not saw_valid:
+        die("No tiles found with required fields 'id', 'row', and 'col'.")
+    return tiles
+
 def _level_for_kind(kind: ContainerKind) -> int:
     # Higher means "richer" (can output more)
     if kind == "full_object":

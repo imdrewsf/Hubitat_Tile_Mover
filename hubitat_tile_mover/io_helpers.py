@@ -11,9 +11,11 @@ def normalize_argv(argv: List[str]) -> List[str]:
     Supports colon variants:
       --import:clipboard
       --import:file <path>
+      --import:hub
       --output_format:full|minimal|bare (legacy: container/list; also accepts legacy --output_shape:*)
       --output_to:terminal
       --output_to:file <path>
+      --output_to:hub
       --sort:irc
       --order:rci (legacy)
       --indent:0
@@ -36,7 +38,7 @@ def normalize_argv(argv: List[str]) -> List[str]:
             out += ["--output_format", a.split(":", 1)[1]]
         elif a.startswith("--output_shape:") or a.startswith("--output-shape:"):
             out += ["--output_format", a.split(":", 1)[1]]
-        elif a.startswith("--output_to:") or a.startswith("--output-to:"):
+        elif a.startswith("--output_to:") or a.startswith("--output-to:") or a.startswith("--output:") or a.startswith("--output-:"):
             out += ["--output_to", a.split(":", 1)[1]]
         else:
             out.append(a)
@@ -61,10 +63,13 @@ def parse_import_spec(spec: Optional[List[str]]) -> Tuple[str, Optional[str]]:
     if len(spec) == 1 and spec[0] == "clipboard":
         return ("clipboard", None)
 
+    if len(spec) == 1 and spec[0] == "hub":
+        return ("hub", None)
+
     if len(spec) == 2 and spec[0] == "file":
         return ("file", spec[1])
 
-    die("Invalid import. Use --import:clipboard OR --import:file <filename>.")
+    die("Invalid import. Use --import:clipboard OR --import:file <filename> OR --import:hub.")
 
 
 def parse_output_to_specs(specs: Optional[List[List[str]]]) -> List[Tuple[str, Optional[str]]]:
@@ -73,13 +78,13 @@ def parse_output_to_specs(specs: Optional[List[List[str]]]) -> List[Tuple[str, O
 
     outs: List[Tuple[str, Optional[str]]] = []
     for s in specs:
-        if len(s) == 1 and s[0] in ("terminal", "clipboard"):
+        if len(s) == 1 and s[0] in ("terminal", "clipboard", "hub"):
             outs.append((s[0], None))
             continue
         if len(s) == 2 and s[0] == "file":
             outs.append(("file", s[1]))
             continue
-        die("Invalid output_to. Use --output_to:terminal OR --output_to:clipboard OR --output_to:file <filename>.")
+        die("Invalid output. Use --output:terminal OR --output:clipboard OR --output:file <filename> OR --output:hub.")
 
     if not outs:
         return [("clipboard", None)]
