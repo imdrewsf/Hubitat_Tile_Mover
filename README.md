@@ -1,42 +1,158 @@
-# hubitat_tile_mover refactor
+hubitat_tile_mover � adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
 
-This ZIP contains a multi-module refactor of `hubitat_tile_mover.py` with additional features:
+Accepted input JSON shapes (3 levels):
+  A) Full:    { ..., "tiles": [ {...}, ... ], ... }
+  B) Minimal: { "tiles": [ {...}, ... ] }
+  C) Bare:    [ {...}, ... ]
 
-## Key changes
+Import (input) (only one; default is clipboard):
+  --import:clipboard
+  --import:file <filename>
+  --import:hub  (requires --url <dashboard local url)
 
-- Range filters now also apply to deletes:
-  - `--col_range` applies to `--insert_rows` and `--delete_rows`
-  - `--row_range` applies to `--insert_cols` and `--delete_cols`
-- Merge-from-another-file:
-  - `--merge_source <file>`
-  - `--merge_cols`, `--merge_rows`, `--merge_range`
-  - These behave like the corresponding `--move_*` operations, but **copy** tiles from the merge source into the destination JSON.
-  - Conflict handling is identical (`--allow_overlap` / `--skip_overlap`).
-- Trimming is now composable:
-  - `--trim`, `--trim_top`, `--trim_left` can be used alongside one movement/edit operation.
-  - Trim is applied **after** the movement/edit operation but **before** `--sort`.
+Output destinations (repeatable; default is clipboard if none specified):
+  --output:terminal
+  --output:clipboard
+  --output:file <filename>
+  --output:hub (requires --url <dashboard local url)
 
-## Run
+Output format (single choice; default matches the input level; cannot exceed input):
+  --output_format:full       (Full dashboard JSON)
+  --output_format:minimal    ({"tiles":[...]}) (cannot be used with --output:hub)
+  --output_format:bare       ([...]) (cannot be used with --output:hub)
 
-```bash
-python hubitat_tile_mover.py --help
-```
+Undo Actions (from output saved directly to hub)
+  --undo_last (restores changes saved to hub by previous run)
+  --confirm_keep (prompts to keep changes saved directly to hub)
 
-- Trim usage: `--trim` (default top+left), `--trim:top`, `--trim:left`, or `--trim:top,left`.
+LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
 
-- Copy ops: `--copy_cols/--copy_rows/--copy_range` duplicate tiles from the input JSON into a new location.
-  If a copied tile's `id` conflicts with an existing tile, it is reassigned to (max existing id + 1), incrementing as needed.
-- Merge ops: copied tiles from `--merge_source` also reassign `id` on conflict using the same rule.
+  MOVE EXISTING TILES
 
-- CSS options:
-  - `--cleanup_css`: when clearing/deleting tiles, attempt to remove CSS rules that reference deleted tile IDs.
-  - `--create_css`: when copying or merging tiles, attempt to create CSS rules for new tile IDs.
+    Insert empty rows / columns:
+      --insert_rows COUNT AT_ROW
+      --insert_cols COUNT AT_COL
+      Modifiers: --include_overlap, --col_range/--row_range
+
+    Move tiles:
+      --move_cols START_COL END_COL DEST_START_COL
+      --move_rows START_ROW END_ROW DEST_START_ROW
+      --move_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+      Modifiers: --include_overlap, --allow_overlap, --skip_overlap
+
+  ADD TILES
+
+    Copy / duplicate existing tiles (within the input layout):
+      --copy_cols START_COL END_COL DEST_START_COL
+      --copy_rows START_ROW END_ROW DEST_START_ROW
+      --copy_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+      Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
+
+    Merge / import tiles from another layout:
+      --merge_source <filename>
+      --merge_cols START_COL END_COL DEST_START_COL
+      --merge_rows START_ROW END_ROW DEST_START_ROW
+      --merge_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+      Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
+
+  REMOVE TILES
+
+    Delete rows / columns (removes tiles AND shifts following tiles up/left):
+      --delete_rows START_ROW END_ROW
+      --delete_cols START_COL END_COL
+      Modifiers: --include_overlap, --row_range/--col_range, --cleanup_css, --force
+
+    Clear tiles (removes tiles but does NOT shift anything):
+      --clear_rows START_ROW END_ROW
+      --clear_cols START_COL END_COL
+      --clear_range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
+      Modifiers: --include_overlap, --cleanup_css, --force
+
+    Crop (remove everything OUTSIDE the kept range):
+      --crop_to_rows START_ROW END_ROW
+      --crop_to_cols START_COL END_COL
+      --crop_to_range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
+      Modifiers: --include_overlap, --cleanup_css, --force
+      Notes: the kept range must contain at least one tile; at least one tile must remain.
+
+    Prune (remove everything EXCEPT matching tiles):
+      --prune_except_ids <comma-separated tile ids>
+      --prune_except_devices <comma-separated device ids>
+      Modifiers: --cleanup_css, --force
+      Notes: at least one tile must match the provided ids/devices; at least one tile must remain.
 
 
-## Sorting
+ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
 
-- Use `--sort[:SPEC]` to sort the tiles list.
-  - Keys: `i`=id, `r`=row, `c`=col
-  - Prefix a key with `-` for descending.
-  - Examples: `--sort:rci`, `--sort:-rci`, `--sort:r-c-i`
-  - Missing keys are appended in `r,c,i` order (ascending).
+  Trim (performed after the layout action, before sorting):
+    --trim                 (same as --trim:top,left)
+    --trim:top
+    --trim:left
+    --trim:top,left
+
+  Sort (only applied if --sort is present; affects output order only):
+    --sort                 (same as --sort:irc)
+    --sort:<SPEC>
+
+    Keys: i=id, r=row, c=col
+    Default SPEC: irc
+    Prefix a key with '-' to sort that key descending (example: --sort:-i r c)
+    Missing keys are appended in i,r,c order (ascending)
+
+  Scrub orphan CSS (performed last, after sorting):
+    --scrub_css
+      Finds tile-specific CSS rules in customCSS that reference tile ids not present as tiles.
+      Prompts before removal unless --force is specified.
+      If --scrub_css is NOT specified and orphans are detected, the program warns how many were found.
+
+
+MODIFIERS
+
+  Selection / overlap:
+    --include_overlap
+      Default selection: tiles are selected when their top-left (row,col) is inside the source/range.
+      With --include_overlap: tiles are also selected when their span intersects the source/range
+      (span uses rowSpan/colSpan; missing span defaults to 1x1).
+
+  Insert/Delete range filters (limit which tiles are affected):
+    --col_range <start_col> <end_col>     (only with --insert_rows and --delete_rows)
+    --row_range <start_row> <end_row>     (only with --insert_cols and --delete_cols)
+      example: --insert_rows 5 10 --col_range 2 7 ==> insert 5 rows at row 10 only in columns 2-7
+
+
+  Destination conflict policy (move/copy/merge only):
+    --allow_overlap
+      Proceed even if destination conflicts exist.
+    --skip_overlap
+      Skip only the tiles that would conflict in the destination.
+    default (neither set):
+      Abort before changing anything if any destination conflicts exist.
+
+  Confirmation suppression:
+    --force
+      Skip interactive confirmations when tiles or CSS rules would be removed.
+
+
+CSS OPTIONS
+
+  --ignore_css
+      When copying/merging tiles, do not create/merge tile-specific CSS rules for new tile ids.
+
+  --cleanup_css
+      When tiles are removed (delete/clear/crop/prune), attempt to remove tile-specific CSS rules for those tile ids.
+      Prompts before removal unless --force is specified.
+
+  Note: Tile id assignment when copying/merging:
+        New tile ids are assigned sequentially starting at:
+            1 + max(highest existing tile id, highest tile id referenced in customCSS)
+        This prevents newly created tiles from accidentally reusing ids that still have orphan CSS rules.
+
+
+DIAGNOSTICS
+
+  --quiet                  Suppress the final one-line summary
+  --verbose                Planned actions summary to STDERR
+  --debug                  Per-tile action logs to STDERR
+
+
+RC 21 adds hub direct import / output, undo
