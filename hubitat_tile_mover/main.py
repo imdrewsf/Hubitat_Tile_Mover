@@ -22,6 +22,7 @@ from .ops_insert import insert_cols, insert_rows
 from .ops_merge import merge_cols, merge_range, merge_rows
 from .ops_move import move_cols, move_range, move_rows
 from .ops_trim import trim_tiles
+from .map_view import render_tile_map
 from .sort_tiles import complete_sort_spec, sort_tiles
 from .tiles import verify_tiles_minimum, as_int
 from .css_ops import (
@@ -225,6 +226,18 @@ def main(argv: Optional[List[str]] = None) -> None:
     using_hub_import = (import_kind == "hub")
     using_hub_output = any(k == "hub" for (k, _p) in outputs)
 
+    # Load input JSON (file/clipboard/hub)
+    hub_ctx = None
+    if using_hub_import:
+        if not args.url:
+            die("--import:hub requires --url. Use -h for help.")
+        hub_ctx, obj = hub_import_layout(args.url, verbose=args.verbose, debug=args.debug)
+    else:
+        from .io_helpers import read_input_text
+        from .jsonio import load_json_from_text
+        input_text = read_input_text(import_kind, import_path)
+        obj = load_json_from_text(input_text, verbose=args.verbose, debug=args.debug)
+
     # Determine if any operation was requested
     do_left, do_top = _parse_trim_modes(args.trim, getattr(args, "trim_left", False), getattr(args, "trim_top", False))
     has_trim = bool(do_left or do_top)
@@ -338,8 +351,32 @@ def main(argv: Optional[List[str]] = None) -> None:
             die("--output:hub requires FULL dashboard JSON input.")
         if args.output_format in ("minimal", "bare", "container", "list"):
             die("--output:hub cannot be used with --output_format:minimal or --output_format:bare.")
-    verify_tiles_minimum(tiles_any)
+    # Tile list validation
+    # Some actions (merge, scrub_css) can run even when the dashboard has no tiles yet.
+    has_tiles = bool(tiles_any)
+    merge_like = bool(args.merge_source or args.merge_url) and bool(args.merge_cols or args.merge_rows or args.merge_range)
+    scrub_like = bool(args.scrub_css)
+    def _ga(name):
+        return getattr(args, name, None)
+    show_map_only = bool(_ga('show_map')) and not any([
+        _ga('sort'), _ga('sort_spec'), _ga('trim'),
+        _ga('insert_rows'), _ga('insert_cols'),
+        _ga('move_cols'), _ga('move_rows'), _ga('move_range'),
+        _ga('copy_cols'), _ga('copy_rows'), _ga('copy_range'),
+        _ga('merge_cols'), _ga('merge_rows'), _ga('merge_range'),
+        _ga('delete_rows'), _ga('delete_cols'),
+        _ga('clear_rows'), _ga('clear_cols'), _ga('clear_range'),
+        _ga('crop_to_rows'), _ga('crop_to_cols'), _ga('crop_to_range'),
+        _ga('prune_except_ids'), _ga('prune_except_devices'),
+        _ga('scrub_css'),
+    ])
+    if has_tiles or (not (merge_like or scrub_like or show_map_only)):
+        verify_tiles_minimum(tiles_any)
     tiles: List[Dict] = tiles_any  # type: ignore[assignment]
+    tiles_before_map = [dict(t) for t in tiles]
+    before_pos = {int(t.get('id')): (int(t.get('row')), int(t.get('col')), int(t.get('rowSpan', 1)), int(t.get('colSpan', 1))) for t in tiles if t.get('id') is not None}
+    if args.show_map:
+        print(render_tile_map(tiles_before_map, title='BEFORE MAP'), end='', file=_sys.stderr)
 
     # Treat tile ids referenced in customCSS as reserved for id assignment (avoids collisions with orphaned CSS).
     css_key_pre, css_text_pre = get_custom_css(obj)
@@ -380,6 +417,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -394,6 +433,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -411,6 +452,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -426,6 +469,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -441,6 +486,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -459,6 +506,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -475,6 +524,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -493,6 +544,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -514,6 +567,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
+        show_map=args.show_map,
+        map_focus=args.map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -679,6 +734,50 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Sort last (only when --sort is present; otherwise preserve original tile order).
     final_tiles = sort_tiles(tiles, args.sort) if args.sort is not None else tiles
+    if args.show_map:
+        after_pos = {int(t.get('id')): (int(t.get('row')), int(t.get('col')), int(t.get('rowSpan', 1)), int(t.get('colSpan', 1))) for t in final_tiles if t.get('id') is not None}
+        changed_ids = {tid for tid, apos in after_pos.items() if before_pos.get(tid) != apos}
+        # Compute overlap rects between changed tiles and unchanged tiles (outcome conflicts).
+        def _tile_rect(t):
+            r = int(t.get('row')); c = int(t.get('col'))
+            rs = int(t.get('rowSpan', 1)); cs = int(t.get('colSpan', 1))
+            return (r, r + rs - 1, c, c + cs - 1)
+
+        changed_tiles = [t for t in final_tiles if int(t.get('id')) in changed_ids]
+        unchanged_tiles = [t for t in final_tiles if t.get('id') is not None and int(t.get('id')) not in changed_ids]
+
+        conflict_rects = []
+        for mt in changed_tiles:
+            mr1, mr2, mc1, mc2 = _tile_rect(mt)
+            for st in unchanged_tiles:
+                sr1, sr2, sc1, sc2 = _tile_rect(st)
+                ir1 = max(mr1, sr1); ir2 = min(mr2, sr2)
+                ic1 = max(mc1, sc1); ic2 = min(mc2, sc2)
+                if ir1 <= ir2 and ic1 <= ic2:
+                    conflict_rects.append((ir1, ir2, ic1, ic2))
+
+        focus_color = 'yellow' if getattr(args, 'allow_overlap', False) else 'red'
+
+        print(render_tile_map(final_tiles, title='OUTCOME MAP', changed_ids=changed_ids, focus_rects=conflict_rects, focus_color=focus_color), end='', file=_sys.stderr)
+
+        # confirm/undo (prompt after outcome map, before any outputs are written)
+        did_undo = False
+        if args.confirm_keep and (backup_obj is not None) and (not args.undo_last):
+            keep = prompt_yes_no(args.force, 'Keep these changes?', default_yes=True)
+            if not keep:
+                did_undo = True
+                # Restore entire original JSON (including tiles/customCSS/etc.) from backup
+                obj = backup_obj
+                kind, full_container, tiles_any = extract_tiles_container(obj, verbose=args.verbose, debug=args.debug)
+                # Tile list validation
+                # Some actions (merge, scrub_css) can run even when the dashboard has no tiles yet.
+                has_tiles = bool(tiles_any)
+                merge_like = bool(args.merge_source or args.merge_url) and bool(args.merge_cols or args.merge_rows or args.merge_range)
+                scrub_like = bool(args.scrub_css)
+                if has_tiles or (not (merge_like or scrub_like or show_map_only)):
+                    verify_tiles_minimum(tiles_any)
+                final_tiles = tiles_any  # type: ignore[assignment]
+
 
     # CSS orphan detection / scrub (performed last, after sorting).
     if css_key is not None:
@@ -721,35 +820,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         post_url_used = hub_post_layout_with_refresh(args.url, hub_ctx.layout_url, output_obj, verbose=args.verbose, debug=args.debug)
         posted = True
 
-    # confirm/undo (if user chooses undo, also re-post to hub if requested)
-    did_undo = False
-    if args.confirm_keep and (backup_obj is not None) and (not args.undo_last):
-        keep = prompt_yes_no(args.force, 'Keep these changes?', default_yes=True)
-        if not keep:
-            did_undo = True
-            output_obj = backup_obj
-
-            # Re-output the original (backup) JSON, not the modified tiles.
-            b_kind, b_full_container, b_tiles_any = extract_tiles_container(backup_obj, verbose=args.verbose, debug=args.debug)
-            verify_tiles_minimum(b_tiles_any)
-            b_tiles = b_tiles_any  # type: ignore[assignment]
-            undo_obj = build_output_object(b_kind, b_full_container, b_tiles, args.output_format)
-            output_obj = undo_obj
-            out_text2 = dump_json(undo_obj, indent=args.indent, minify=args.minify)
-            if not out_text2.endswith("\n"):
-                out_text2 += "\n"
-
-            write_outputs(non_hub_outputs, args.newline, out_text2)
-            if using_hub_output:
-                if hub_ctx is None:
-                    hub_ctx, _tmp = hub_import_layout(args.url, verbose=False, debug=False)
-                post_url_used = hub_post_layout_with_refresh(args.url, hub_ctx.layout_url, output_obj, verbose=args.verbose, debug=args.debug)
-                posted = True
-
-
     if not args.quiet:
         from .util import ok
-        import sys
 
         dests =  ", ".join([f"{k}" if k != "file" else f"file:{p}" for k, p in outputs])
         sort_msg = f"sorted ({args.sort})" if args.sort is not None else "original order"
@@ -775,4 +847,4 @@ def main(argv: Optional[List[str]] = None) -> None:
         except Exception:
             pass
 
-        print(f"{ok('OK:')} {status}. {len(final_tiles)} tile(s) written to {dests} ({sort_msg}).", file=sys.stderr)
+        print(f"{ok('OK:')} {status}. {len(final_tiles)} tile(s) written to {dests} ({sort_msg}).", file=_sys.stderr)

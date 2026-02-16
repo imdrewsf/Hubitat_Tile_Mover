@@ -7,6 +7,7 @@ from .ops_move import scan_move_conflicts
 from .selectors import select_tiles_by_col_range, select_tiles_by_row_range, select_tiles_by_rect_range
 from .tiles import as_int, rect, set_int_like
 from .util import die, dlog, vlog
+from .map_view import render_tile_map, conflict_rects_from_details
 
 def _next_id_state(dest_tiles: List[Dict[str, Any]], *, reserved_ids: Optional[Set[int]] = None) -> tuple[set[int], int]:
     used = {as_int(t, "id") for t in dest_tiles}
@@ -33,6 +34,8 @@ def _conflict_scan_and_append(
     copies: List[Dict[str, Any]],
     allow_overlap: bool,
     skip_overlap: bool,
+    show_map: bool,
+    map_focus: str = 'full',
     verbose: bool,
     debug: bool,
     label: str,
@@ -48,8 +51,20 @@ def _conflict_scan_and_append(
 
     if conflicts_by_mid and not allow_overlap and not skip_overlap:
         sample = list(conflicts_by_mid.items())[:10]
-        details = "; ".join([f"copy id={mid} conflicts with {sids}" for mid, sids in sample])
+        details = "; ".join([f"copy id={mid} conflicts at r{entries[0][1][0]}..{entries[0][1][1]},c{entries[0][1][2]}..{entries[0][1][3]} with {[sid for sid,_ in entries]}" for mid, entries in sample])
         more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
+        if show_map:
+            focus = conflict_rects_from_details(conflicts_by_mid)
+            try:
+                focus_arg = focus if map_focus == 'conflict' else None
+                tiles_for_map = dest_tiles if map_focus == 'full' else (stationary + copies)
+                # Conflict map: gray=stationary, green=moving/copied (non-conflict), red=conflict
+                tiles_for_map = stationary
+                hi_rects = [rect(t) for t in copies]
+                bounds_rects = [rect(t) for t in dest_tiles] if map_focus == 'full' else (focus if map_focus == 'conflict' else None)
+                print(render_tile_map(tiles_for_map, title='CONFLICT MAP', focus_rects=focus, bounds_rects=bounds_rects, highlight_rects=hi_rects), end='')
+            except Exception:
+                pass
         die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
 
     added = 0
@@ -76,6 +91,8 @@ def copy_cols(
     include_overlap: bool,
     allow_overlap: bool,
     skip_overlap: bool,
+    show_map: bool,
+    map_focus: str = 'full',
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -118,6 +135,8 @@ def copy_cols(
         verbose=verbose,
         debug=debug,
         label="copy_cols",
+        show_map=show_map,
+        map_focus=map_focus,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}
@@ -131,6 +150,8 @@ def copy_rows(
     include_overlap: bool,
     allow_overlap: bool,
     skip_overlap: bool,
+    show_map: bool,
+    map_focus: str = 'full',
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -173,6 +194,8 @@ def copy_rows(
         verbose=verbose,
         debug=debug,
         label="copy_rows",
+        show_map=show_map,
+        map_focus=map_focus,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}
@@ -189,6 +212,8 @@ def copy_range(
     include_overlap: bool,
     allow_overlap: bool,
     skip_overlap: bool,
+    show_map: bool,
+    map_focus: str = 'full',
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -243,6 +268,8 @@ def copy_range(
         verbose=verbose,
         debug=debug,
         label="copy_range",
+        show_map=show_map,
+        map_focus=map_focus,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}

@@ -32,6 +32,8 @@ def normalize_argv(argv: List[str]) -> List[str]:
             out += ["--indent", a.split(":", 1)[1]]
         elif a.startswith("--trim:"):
             out += ["--trim", a.split(":", 1)[1]]
+        elif a.startswith("--map_focus:") or a.startswith("--map-focus:"):
+            out += ["--map_focus", a.split(":", 1)[1]]
         elif a.startswith("--import:"):
             out += ["--import", a.split(":", 1)[1]]
         elif a.startswith("--output_format:") or a.startswith("--output-format:"):

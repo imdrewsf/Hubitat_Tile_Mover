@@ -64,8 +64,18 @@ Modifiers:
 
 Hubitat direct mode:
   --url <dashboard_url>
-  --undo_last                       (standalone; restores backup to last output unless --output is provided)
+  --undo_last                       (standalone; restore last backup to last outputs unless --output is provided)
   --confirm_keep                    (prompt to keep; if not, restore backup)
+  --lock_backup                     (preserve existing backup; reuse it as restore point)
+
+Maps:
+  --show_map                 (print BEFORE / OUTCOME maps)
+  --map_focus full|conflict  (default: full; conflict maps only)
+
+Diagnostics:
+  --quiet                    (suppress status line)
+  --verbose                  (more detail)
+  --debug                    (per-tile + stack details)
 
 More help:
   --help_full
@@ -103,6 +113,7 @@ Hubitat direct mode (optional):
   --undo_last               (restore from the last backup and write to outputs)
   --confirm_keep            (after writing changed output(s), prompt to keep; if not, restore backup)
   --lock_backup             (do not overwrite existing backup; reuse as restore point)
+                           Backup file is stored in the current working directory and is per-dashboard.
 
 
 LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
@@ -212,6 +223,20 @@ MODIFIERS
       Skip interactive confirmations when tiles or CSS rules would be removed.
 
 
+MAPS
+
+  --show_map
+      Print a BEFORE MAP (input) and OUTCOME MAP (after applying the action).
+      In the outcome map: changed tiles are green; overlap portions are red (or yellow with --allow_overlap).
+
+  --map_focus full|conflict
+      full: show the full bounds of the layout (default)
+      conflict: zoom to the conflict/overlap region
+
+  Notes:
+      Some operations may also print a CONFLICT MAP when destination conflicts are detected.
+      In conflict maps: stationary tiles are gray, moved/copied tiles are green, and conflicts are red/yellow.
+
 CSS OPTIONS
 
   --ignore_css
@@ -268,7 +293,7 @@ def build_parser() -> argparse.ArgumentParser:
         usage="hubitat_tile_mover.py [options]",
     )
 
-    p.add_argument("--help_full", action=HelpFullAction, nargs=0, help=argparse.SUPPRESS)
+    p.add_argument("--help_full", action=HelpFullAction, nargs=0, help="(see --help_full for details)")
 
     # Keep argument groups for internal structure (even though custom help is printed).
     io_grp = p.add_argument_group("Import / Output")
@@ -296,7 +321,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         metavar=("KIND", "PATH"),
         default=None,
-        help=argparse.SUPPRESS,
+        help="(see --help_full for details)",
     )
     io_grp.add_argument(
         "--output_to",
@@ -306,7 +331,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         metavar=("DEST", "ARG"),
         default=None,
-        help=argparse.SUPPRESS,
+        help="(see --help_full for details)",
     )
     io_grp.add_argument(
         "--output_format",
@@ -315,95 +340,98 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-shape",
         choices=["full", "minimal", "bare", "container", "list"],
         default=None,
-        help=argparse.SUPPRESS,
+        help="(see --help_full for details)",
     )
 
     fmt_grp = p.add_argument_group("JSON Formatting")
-    fmt_grp.add_argument("--indent", type=int, default=2, help=argparse.SUPPRESS)
-    fmt_grp.add_argument("--minify", action="store_true", help=argparse.SUPPRESS)
-    fmt_grp.add_argument("--newline", choices=["keep", "lf", "crlf"], default="keep", help=argparse.SUPPRESS)
+    fmt_grp.add_argument("--indent", type=int, default=2, help="(see --help_full for details)")
+    fmt_grp.add_argument("--minify", action="store_true", help="(see --help_full for details)")
+    fmt_grp.add_argument("--newline", choices=["keep", "lf", "crlf"], default="keep", help="(see --help_full for details)")
 
     ops_grp = p.add_argument_group("Operations")
     ops = ops_grp.add_mutually_exclusive_group(required=False)
 
-    ops.add_argument("--insert_rows", "--insert-rows", nargs=2, metavar=("COUNT", "AT_ROW"), type=int, help=argparse.SUPPRESS)
+    ops.add_argument("--insert_rows", "--insert-rows", nargs=2, metavar=("COUNT", "AT_ROW"), type=int, help="(see --help_full for details)")
     ops.add_argument("--insert_cols", "--insert-cols", "--insert_columns", "--insert-columns",
-                     nargs=2, metavar=("COUNT", "AT_COL"), type=int, help=argparse.SUPPRESS)
+                     nargs=2, metavar=("COUNT", "AT_COL"), type=int, help="(see --help_full for details)")
 
     ops.add_argument("--move_cols", "--move-cols", "--move_columns", "--move-columns",
-                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help=argparse.SUPPRESS)
+                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
     ops.add_argument("--move_rows", "--move-rows",
-                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help=argparse.SUPPRESS)
+                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
     ops.add_argument("--move_range", "--move-range",
                      nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
-                     type=int, help=argparse.SUPPRESS)
+                     type=int, help="(see --help_full for details)")
 
     ops.add_argument("--copy_cols", "--copy-cols",
-                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help=argparse.SUPPRESS)
+                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
     ops.add_argument("--copy_rows", "--copy-rows",
-                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help=argparse.SUPPRESS)
+                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
     ops.add_argument("--copy_range", "--copy-range",
                      nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
-                     type=int, help=argparse.SUPPRESS)
+                     type=int, help="(see --help_full for details)")
 
     ops.add_argument("--merge_cols", "--merge-cols",
-                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help=argparse.SUPPRESS)
+                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
     ops.add_argument("--merge_rows", "--merge-rows",
-                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help=argparse.SUPPRESS)
+                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
     ops.add_argument("--merge_range", "--merge-range",
                      nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
-                     type=int, help=argparse.SUPPRESS)
+                     type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--delete_rows", "--delete-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help=argparse.SUPPRESS)
+    ops.add_argument("--delete_rows", "--delete-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
     ops.add_argument("--delete_cols", "--delete-cols", "--delete_columns", "--delete-columns",
-                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help=argparse.SUPPRESS)
+                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--clear_rows", "--clear-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help=argparse.SUPPRESS)
+    ops.add_argument("--clear_rows", "--clear-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
     ops.add_argument("--clear_cols", "--clear-cols", "--clear_columns", "--clear-columns",
-                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help=argparse.SUPPRESS)
-    ops.add_argument("--clear_range", "--clear-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help=argparse.SUPPRESS)
+                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
+    ops.add_argument("--clear_range", "--clear-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--crop_to_rows", "--crop-to-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help=argparse.SUPPRESS)
+    ops.add_argument("--crop_to_rows", "--crop-to-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
     ops.add_argument("--crop_to_cols", "--crop-to-cols", "--crop_to_columns", "--crop-to-columns",
-                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help=argparse.SUPPRESS)
-    ops.add_argument("--crop_to_range", "--crop-to-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help=argparse.SUPPRESS)
+                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
+    ops.add_argument("--crop_to_range", "--crop-to-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--prune_except_ids", "--prune-except-ids", metavar="ID1,ID2,...", type=str, help=argparse.SUPPRESS)
-    ops.add_argument("--prune_except_devices", "--prune-except-devices", metavar="DEV1,DEV2,...", type=str, help=argparse.SUPPRESS)
+    ops.add_argument("--prune_except_ids", "--prune-except-ids", metavar="ID1,ID2,...", type=str, help="(see --help_full for details)")
+    ops.add_argument("--prune_except_devices", "--prune-except-devices", metavar="DEV1,DEV2,...", type=str, help="(see --help_full for details)")
 
 
-    ops_grp.add_argument("--merge_source", "--merge-source", default=None, help=argparse.SUPPRESS)
+    ops_grp.add_argument("--merge_source", "--merge-source", default=None, help="(see --help_full for details)")
 
     filters_grp = p.add_argument_group("Filters")
-    filters_grp.add_argument("--include_overlap", "--include-overlap", action="store_true", help=argparse.SUPPRESS)
-    filters_grp.add_argument("--col_range", "--col-range", nargs=2, metavar=("COL_START", "COL_END"), type=int, help=argparse.SUPPRESS)
-    filters_grp.add_argument("--row_range", "--row-range", nargs=2, metavar=("ROW_START", "ROW_END"), type=int, help=argparse.SUPPRESS)
+    filters_grp.add_argument("--include_overlap", "--include-overlap", action="store_true", help="(see --help_full for details)")
+    filters_grp.add_argument("--col_range", "--col-range", nargs=2, metavar=("COL_START", "COL_END"), type=int, help="(see --help_full for details)")
+    filters_grp.add_argument("--row_range", "--row-range", nargs=2, metavar=("ROW_START", "ROW_END"), type=int, help="(see --help_full for details)")
 
     overlap_grp = p.add_argument_group("Overlap Policy")
     conflict = overlap_grp.add_mutually_exclusive_group(required=False)
-    conflict.add_argument("--allow_overlap", "--allow-overlap", action="store_true", help=argparse.SUPPRESS)
-    conflict.add_argument("--skip_overlap", "--skip-overlap", action="store_true", help=argparse.SUPPRESS)
+    conflict.add_argument("--allow_overlap", "--allow-overlap", action="store_true", help="(see --help_full for details)")
+    conflict.add_argument("--skip_overlap", "--skip-overlap", action="store_true", help="(see --help_full for details)")
 
     safety_grp = p.add_argument_group("Safety")
-    safety_grp.add_argument("--force", action="store_true", help=argparse.SUPPRESS)
+    safety_grp.add_argument("--force", action="store_true", help="(see --help_full for details)")
 
     trim_sort_grp = p.add_argument_group("Trim / Sort")
-    trim_sort_grp.add_argument("--trim", nargs="?", const="both", default=None, metavar="MODE", help=argparse.SUPPRESS)
-    trim_sort_grp.add_argument("--trim_left", "--trim-left", action="store_true", help=argparse.SUPPRESS)
-    trim_sort_grp.add_argument("--trim_top", "--trim-top", action="store_true", help=argparse.SUPPRESS)
+    trim_sort_grp.add_argument("--trim", nargs="?", const="both", default=None, metavar="MODE", help="(see --help_full for details)")
+    trim_sort_grp.add_argument("--trim_left", "--trim-left", action="store_true", help="(see --help_full for details)")
+    trim_sort_grp.add_argument("--trim_top", "--trim-top", action="store_true", help="(see --help_full for details)")
 
     # --sort[:SPEC] (single switch). We keep legacy --order hidden.
-    trim_sort_grp.add_argument("--sort", nargs="?", const="irc", default=None, metavar="SPEC", help=argparse.SUPPRESS)
-    trim_sort_grp.add_argument("--order", default=None, help=argparse.SUPPRESS)
+    trim_sort_grp.add_argument("--sort", nargs="?", const="irc", default=None, metavar="SPEC", help="(see --help_full for details)")
+    trim_sort_grp.add_argument("--order", default=None, help="(see --help_full for details)")
 
     css_grp = p.add_argument_group("CSS")
-    css_grp.add_argument("--cleanup_css", "--cleanup-css", action="store_true", help=argparse.SUPPRESS)
-    css_grp.add_argument("--ignore_css", "--create-css", action="store_true", help=argparse.SUPPRESS)
-    css_grp.add_argument("--scrub_css", "--scrub-css", action="store_true", help=argparse.SUPPRESS)
+    css_grp.add_argument("--cleanup_css", "--cleanup-css", action="store_true", help="Remove tile-specific CSS rules for deleted/cleared tiles (best-effort)")
+    css_grp.add_argument("--ignore_css", "--create-css", action="store_true", help="Do NOT create/copy tile-specific CSS rules for new ids when copying/merging (default is to create/copy)")
+    css_grp.add_argument("--scrub_css", "--scrub-css", action="store_true", help="Remove orphan tile-specific CSS rules (no matching tile id) after actions")
 
     diag_grp = p.add_argument_group("Diagnostics")
-    diag_grp.add_argument("--verbose", action="store_true", help=argparse.SUPPRESS)
-    diag_grp.add_argument("--debug", action="store_true", help=argparse.SUPPRESS)
-    diag_grp.add_argument("--quiet", action="store_true", help=argparse.SUPPRESS)
+    diag_grp.add_argument("--show_map", dest="show_map", action="store_true", help="Show BEFORE/AFTER ASCII layout maps in the terminal")
+    diag_grp.add_argument("--map_focus", dest="map_focus", choices=["full","conflict"], default="full",
+                          help="When printing conflict maps, show full bounds or focus on conflict area (default: full)")
+    diag_grp.add_argument("--verbose", action="store_true", help="Verbose output to STDERR")
+    diag_grp.add_argument("--debug", action="store_true", help="Debug output (very verbose) to STDERR")
+    diag_grp.add_argument("--quiet", action="store_true", help="Suppress final status line")
 
     return p

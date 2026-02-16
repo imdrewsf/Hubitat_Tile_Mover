@@ -1,21 +1,25 @@
 from __future__ import annotations
 
+import sys as _sys
+
 from typing import Any, Callable, Dict, List, Tuple
 
 from .geometry import rects_overlap
 from .selectors import select_tiles_by_col_range, select_tiles_by_row_range, select_tiles_by_rect_range
 from .tiles import as_int, rect, set_int_like
 from .util import die, dlog, vlog
+from .map_view import render_tile_map, conflict_rects_from_details
 
 
 def scan_move_conflicts(
     moving_tiles: List[Dict[str, Any]],
     stationary_tiles: List[Dict[str, Any]],
     moved_rect_fn: Callable[[Dict[str, Any]], Tuple[int, int, int, int]],
-) -> Tuple[Dict[int, List[int]], int]:
+) -> Tuple[Dict[int, List[Tuple[int, Tuple[int, int, int, int]]]], int]:
     stationary_rects: List[Tuple[Dict[str, Any], Tuple[int, int, int, int]]] = [(t, rect(t)) for t in stationary_tiles]
 
-    conflicts: Dict[int, List[int]] = {}
+    # conflicts[moving_id] -> list of (stationary_id, overlap_rect)
+    conflicts: Dict[int, List[Tuple[int, Tuple[int, int, int, int]]]] = {}
     total_pairs = 0
 
     for mt in moving_tiles:
@@ -25,11 +29,16 @@ def scan_move_conflicts(
         for st, srect in stationary_rects:
             if rects_overlap(mrect, srect):
                 sid = as_int(st, "id")
-                conflicts.setdefault(mid, []).append(sid)
+                # overlap rect (inclusive)
+                or1 = max(mrect[0], srect[0])
+                or2 = min(mrect[1], srect[1])
+                oc1 = max(mrect[2], srect[2])
+                oc2 = min(mrect[3], srect[3])
+                orect = (or1, or2, oc1, oc2)
+                conflicts.setdefault(mid, []).append((sid, orect))
                 total_pairs += 1
 
     return conflicts, total_pairs
-
 
 def move_cols(
     tiles: List[Dict[str, Any]],
@@ -40,6 +49,8 @@ def move_cols(
     include_overlap: bool,
     allow_overlap: bool,
     skip_overlap: bool,
+    show_map: bool,
+    map_focus: str = 'full',
     verbose: bool,
     debug: bool,
 ) -> None:
@@ -68,8 +79,21 @@ def move_cols(
 
     if conflicts_by_mid and not allow_overlap and not skip_overlap:
         sample = list(conflicts_by_mid.items())[:10]
-        details = "; ".join([f"move id={mid} conflicts with {sids}" for mid, sids in sample])
+        details = '; '.join([f"move id={mid} conflicts at r{entries[0][1][0]}..{entries[0][1][1]},c{entries[0][1][2]}..{entries[0][1][3]} with {[sid for sid,_ in entries]}" for mid, entries in sample])
         more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
+        if show_map:
+            try:
+                # Conflict map (pre-flight): gray=stationary, green=moved destination footprints, red=overlap region
+                focus = conflict_rects_from_details(conflicts_by_mid)
+                moved_rects = [moved_rect(t) for t in moving]
+                bounds_rects = None
+                if map_focus == 'full':
+                    bounds_rects = [rect(t) for t in stationary] + moved_rects
+                elif map_focus == 'conflict':
+                    bounds_rects = focus
+                print(render_tile_map(stationary, title='CONFLICT MAP', focus_rects=focus, bounds_rects=bounds_rects, highlight_rects=moved_rects), end='', file=_sys.stderr)
+            except Exception:
+                pass
         die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
 
     for t in moving:
@@ -96,6 +120,8 @@ def move_rows(
     include_overlap: bool,
     allow_overlap: bool,
     skip_overlap: bool,
+    show_map: bool,
+    map_focus: str = 'full',
     verbose: bool,
     debug: bool,
 ) -> None:
@@ -124,8 +150,21 @@ def move_rows(
 
     if conflicts_by_mid and not allow_overlap and not skip_overlap:
         sample = list(conflicts_by_mid.items())[:10]
-        details = "; ".join([f"move id={mid} conflicts with {sids}" for mid, sids in sample])
+        details = '; '.join([f"move id={mid} conflicts at r{entries[0][1][0]}..{entries[0][1][1]},c{entries[0][1][2]}..{entries[0][1][3]} with {[sid for sid,_ in entries]}" for mid, entries in sample])
         more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
+        if show_map:
+            try:
+                # Conflict map (pre-flight): gray=stationary, green=moved destination footprints, red=overlap region
+                focus = conflict_rects_from_details(conflicts_by_mid)
+                moved_rects = [moved_rect(t) for t in moving]
+                bounds_rects = None
+                if map_focus == 'full':
+                    bounds_rects = [rect(t) for t in stationary] + moved_rects
+                elif map_focus == 'conflict':
+                    bounds_rects = focus
+                print(render_tile_map(stationary, title='CONFLICT MAP', focus_rects=focus, bounds_rects=bounds_rects, highlight_rects=moved_rects), end='', file=_sys.stderr)
+            except Exception:
+                pass
         die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
 
     for t in moving:
@@ -155,6 +194,8 @@ def move_range(
     include_overlap: bool,
     allow_overlap: bool,
     skip_overlap: bool,
+    show_map: bool,
+    map_focus: str = 'full',
     verbose: bool,
     debug: bool,
 ) -> None:
@@ -197,8 +238,21 @@ def move_range(
 
     if conflicts_by_mid and not allow_overlap and not skip_overlap:
         sample = list(conflicts_by_mid.items())[:10]
-        details = "; ".join([f"move id={mid} conflicts with {sids}" for mid, sids in sample])
+        details = '; '.join([f"move id={mid} conflicts at r{entries[0][1][0]}..{entries[0][1][1]},c{entries[0][1][2]}..{entries[0][1][3]} with {[sid for sid,_ in entries]}" for mid, entries in sample])
         more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
+        if show_map:
+            try:
+                # Conflict map (pre-flight): gray=stationary, green=moved destination footprints, red=overlap region
+                focus = conflict_rects_from_details(conflicts_by_mid)
+                moved_rects = [moved_rect(t) for t in moving]
+                bounds_rects = None
+                if map_focus == 'full':
+                    bounds_rects = [rect(t) for t in stationary] + moved_rects
+                elif map_focus == 'conflict':
+                    bounds_rects = focus
+                print(render_tile_map(stationary, title='CONFLICT MAP', focus_rects=focus, bounds_rects=bounds_rects, highlight_rects=moved_rects), end='', file=_sys.stderr)
+            except Exception:
+                pass
         die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
 
     for t in moving:

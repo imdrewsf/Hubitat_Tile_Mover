@@ -24,6 +24,9 @@ Output format (single choice; default matches the input level; cannot exceed inp
 Undo Actions (from output saved directly to hub)
   --undo_last (restores changes saved to hub by previous run)
   --confirm_keep (prompts to keep changes saved directly to hub)
+  --lock_backup (keep existing undo file as current restore point)
+  Note: undo files are maintained per dashboard.
+
 
 LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
 
@@ -105,6 +108,10 @@ ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
       Prompts before removal unless --force is specified.
       If --scrub_css is NOT specified and orphans are detected, the program warns how many were found.
 
+  Layout Maps: (Show in terminal before and after layouts, movement conflicts)
+    --show_map                 (print BEFORE / OUTCOME maps)
+    --map_focus full|conflict  (default: full; conflict maps only)
+    Note: Show map can be used without an action to display the current layout of the import dashboard.
 
 MODIFIERS
 
