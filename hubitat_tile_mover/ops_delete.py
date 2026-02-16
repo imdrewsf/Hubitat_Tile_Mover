@@ -9,7 +9,8 @@ from .selectors import (
     tile_matches_col_range,
     tile_matches_row_range,
 )
-from .tiles import as_int, set_int_like, tile_col_extent, tile_row_extent
+from .tiles import as_int, set_int_like, tile_col_extent, tile_row_extent, rect
+from .map_view import render_tile_map
 from .util import dlog, format_id_sample, prompt_yes_no_or_die, vlog
 from .util import die as _die
 
@@ -24,9 +25,11 @@ def delete_rows(
     force: bool,
     verbose: bool,
     debug: bool,
+    show_map: bool = False,
+    map_focus: str = 'full',
 ) -> List[int]:
     if start_row <= 0 or end_row <= 0:
-        _die("--delete_rows values must be positive (1-based).")
+        _die("--delete_cols values must be positive (1-based).")
     if start_row > end_row:
         start_row, end_row = end_row, start_row
 
@@ -49,10 +52,10 @@ def delete_rows(
     selected_ids = [as_int(t, "id") for t in selected]
     if selected:
         details_lines = [
-            f"WARNING: --delete_cols {start_col}..{end_col} will delete {len(selected)} tile(s). "
+            f"WARNING: --delete_rows {start_col}..{end_col} will delete {len(selected)} tile(s). "
             f"IDs: {format_id_sample(selected_ids)}"
         ]
-        friendly = f"There are {len(selected)} tiles in columns {start_col}–{end_col}."
+        friendly = f"There are {len(selected)} tiles in rows {start_col}–{end_col}."
         if row_range:
             friendly += f" (Limited to rows {row_range[0]}–{row_range[1]}.)"
         if not include_overlap:
@@ -70,7 +73,12 @@ def delete_rows(
                 friendly += (
                     f" Note: {len(straddlers)} spanning tile(s) are NOT selected because --include_overlap is not set."
                 )
-        friendly += " Are you sure you want to delete these tiles?"
+                friendly += " Are you sure you want to delete these tiles?"
+        if show_map:
+            import sys as _sys
+            mark_rects = [rect(t) for t in selected]
+            bounds_rects = mark_rects if map_focus == 'conflict' else None
+            print(render_tile_map(tiles, title='BEFORE MAP (TO BE REMOVED)', mark_rects=mark_rects, bounds_rects=bounds_rects), end='', file=_sys.stderr)
         prompt_yes_no_or_die(
             force,
             friendly,
@@ -78,7 +86,6 @@ def delete_rows(
             details="\n".join(details_lines),
             show_details=(verbose or debug),
         )
-
     selected_obj_ids = {id(t) for t in selected}
     before = len(tiles)
     tiles[:] = [t for t in tiles if id(t) not in selected_obj_ids]
@@ -110,9 +117,11 @@ def delete_cols(
     force: bool,
     verbose: bool,
     debug: bool,
+    show_map: bool = False,
+    map_focus: str = 'full',
 ) -> List[int]:
     if start_col <= 0 or end_col <= 0:
-        _die("--delete_cols values must be positive (1-based).")
+        _die("--delete_rows values must be positive (1-based).")
     if start_col > end_col:
         start_col, end_col = end_col, start_col
 
@@ -135,10 +144,10 @@ def delete_cols(
     selected_ids = [as_int(t, "id") for t in selected]
     if selected:
         details_lines = [
-            f"WARNING: --delete_cols {start_col}..{end_col} will delete {len(selected)} tile(s). "
+            f"WARNING: --delete_rows {start_col}..{end_col} will delete {len(selected)} tile(s). "
             f"IDs: {format_id_sample(selected_ids)}"
         ]
-        friendly = f"There are {len(selected)} tiles in columns {start_col}–{end_col}."
+        friendly = f"There are {len(selected)} tiles in rows {start_col}–{end_col}."
         if row_range:
             friendly += f" (Limited to rows {row_range[0]}–{row_range[1]}.)"
         if not include_overlap:
@@ -156,7 +165,12 @@ def delete_cols(
                 friendly += (
                     f" Note: {len(straddlers)} spanning tile(s) are NOT selected because --include_overlap is not set."
                 )
-        friendly += " Are you sure you want to delete these tiles?"
+                friendly += " Are you sure you want to delete these tiles?"
+        if show_map:
+            import sys as _sys
+            mark_rects = [rect(t) for t in selected]
+            bounds_rects = mark_rects if map_focus == 'conflict' else None
+            print(render_tile_map(tiles, title='BEFORE MAP (TO BE REMOVED)', mark_rects=mark_rects, bounds_rects=bounds_rects), end='', file=_sys.stderr)
         prompt_yes_no_or_die(
             force,
             friendly,
@@ -164,7 +178,6 @@ def delete_cols(
             details="\n".join(details_lines),
             show_details=(verbose or debug),
         )
-
     selected_obj_ids = {id(t) for t in selected}
     before = len(tiles)
     tiles[:] = [t for t in tiles if id(t) not in selected_obj_ids]

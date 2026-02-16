@@ -41,6 +41,8 @@ def render_tile_map(
     focus_rects: Optional[List[Rect]] = None,
     bounds_rects: Optional[Sequence[Rect]] = None,
     highlight_rects: Optional[Sequence[Rect]] = None,
+    mark_rects: Optional[Sequence[Rect]] = None,
+    mark_color: str = 'orange',
     focus_color: str = 'red',
 ) -> str:
     """
@@ -73,7 +75,7 @@ def render_tile_map(
     w = max(20, width)
     h = max(8, height)
 
-    # 0 empty, 1 unchanged, 2 green (changed/highlight), 3 conflict overlay
+    # 0 empty, 1 unchanged, 2 green (changed/highlight), 3 conflict overlay, 4 mark overlay (e.g., to-be-deleted)
     grid = [[0 for _ in range(w)] for _ in range(h)]
 
     def to_xy(r: int, c: int) -> Tuple[int, int]:
@@ -115,6 +117,22 @@ def render_tile_map(
                     if grid[y][x] != 3:  # don't override conflicts
                         grid[y][x] = 2
 
+
+    # Overlay mark rects (e.g., tiles to be deleted/cleared) in orange by default
+    if mark_rects:
+        for mr in mark_rects:
+            r1, r2, c1, c2 = mr
+            r1 = max(r1, br1); r2 = min(r2, br2)
+            c1 = max(c1, bc1); c2 = min(c2, bc2)
+            if r2 < r1 or c2 < c1:
+                continue
+            y1, x1 = to_xy(r1, c1)
+            y2, x2 = to_xy(r2, c2)
+            for y in range(min(y1, y2), max(y1, y2) + 1):
+                for x in range(min(x1, x2), max(x1, x2) + 1):
+                    if grid[y][x] != 3:  # don't override conflicts
+                        grid[y][x] = 4
+
     # Overlay focus/conflict rects in red
     if focus_rects:
         for fr in focus_rects:
@@ -140,12 +158,15 @@ def render_tile_map(
             return _c("90", "█")  # gray
         if v == 2:
             return _c("32;1", "█")  # green
+        if v == 4:
+            return _c("38;5;208;1", "█") if mark_color == 'orange' else _c("33;1", "█")
         return _c("33;1", "█") if focus_color == 'yellow' else _c("31;1", "█")  # conflict
 
     header = (
         f"{title}\n"
         f"Bounds: rows {br1}..{br2}, cols {bc1}..{bc2} | tiles: {len(tiles)}\n"
         f"Legend: {_c('90','█')} tile  {_c('32;1','█')} changed  "
+        f"{(_c('38;5;208;1','█') + ' remove  ') if mark_rects else ''}"
         f"{(_c('33;1','█') if focus_color=='yellow' else _c('31;1','█'))} conflict  · empty\n"
     )
     body_lines = [top]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from typing import Dict, List, Optional, Tuple
 
 from .cli import build_parser
@@ -164,6 +165,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     import_kind, import_path = parse_import_spec(args.import_spec)
     outputs = parse_output_to_specs(args.output_to)
 
+    show_map = bool(getattr(args, 'show_map', False))
+    map_focus = getattr(args, 'map_focus', 'full')
+
     # --undo_last is a standalone restore action.
     # It restores the previous backup and writes it to the last output destinations unless --output/--output_to is provided.
     if args.undo_last:
@@ -184,6 +188,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         st = _read_state()
 
         backup_path = st.get("backup_path")
+        if (not backup_path or not os.path.exists(backup_path)) and args.url:
+            # If the user specified a URL, try the derived per-dashboard backup path.
+            cand = _backup_path_for_url(args.url)
+            if os.path.exists(cand):
+                backup_path = cand
         if not backup_path or not os.path.exists(backup_path):
             die("Backup file not found; nothing to undo.")
 
@@ -418,7 +427,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -434,7 +443,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -453,7 +462,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -470,7 +479,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -487,7 +496,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -507,7 +516,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -525,7 +534,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -545,7 +554,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -568,7 +577,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
         show_map=args.show_map,
-        map_focus=args.map_focus,
+        map_focus=getattr(args,'map_focus','full'),
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -587,6 +596,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
+        show_map=show_map,
+        map_focus=map_focus,
         )
 
     elif args.delete_cols:
@@ -600,6 +611,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
+        show_map=show_map,
+        map_focus=map_focus,
         )
 
     elif args.clear_rows:
@@ -611,6 +624,9 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
+            debug=args.debug,
+            show_map=show_map,
+            map_focus=map_focus,
         )
 
     elif args.clear_cols:
@@ -622,6 +638,9 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
+            debug=args.debug,
+            show_map=show_map,
+            map_focus=map_focus,
         )
 
     elif args.clear_range:
@@ -635,6 +654,9 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
+            debug=args.debug,
+            show_map=show_map,
+            map_focus=map_focus,
         )
 
     elif args.crop_to_rows:
@@ -647,6 +669,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
         debug=args.debug,
+        show_map=show_map,
+        map_focus=map_focus,
         )
 
     elif args.crop_to_cols:
@@ -820,31 +844,32 @@ def main(argv: Optional[List[str]] = None) -> None:
         post_url_used = hub_post_layout_with_refresh(args.url, hub_ctx.layout_url, output_obj, verbose=args.verbose, debug=args.debug)
         posted = True
 
+    # Commit backup (atomic) and persist last-run state for --undo_last defaults.
+    try:
+        # If we created a new backup this run, commit it only after all outputs (and hub POST) succeeded.
+        if backup_tmp_path and backup_path and (not (args.lock_backup and os.path.exists(backup_path))):
+            os.replace(backup_tmp_path, backup_path)
+        _write_state({
+            "backup_path": backup_path,
+            "last_outputs": outputs,
+            "last_url": args.url,
+            "last_output_format": args.output_format,
+        })
+    except Exception:
+        pass
+
     if not args.quiet:
-        from .util import ok
+            from .util import ok
 
-        dests =  ", ".join([f"{k}" if k != "file" else f"file:{p}" for k, p in outputs])
-        sort_msg = f"sorted ({args.sort})" if args.sort is not None else "original order"
-        status_bits = []
-        if args.undo_last:
-            status_bits.append('undo applied')
-        if posted:
-            status_bits.append('saved to hub')
-        if did_undo:
-            status_bits.append('then undone')
-        status = '; '.join(status_bits) if status_bits else 'completed'
-        # Commit backup (atomic) and persist last-run state for --undo_last defaults.
-        try:
-            # If we created a new backup this run, commit it only after all outputs (and hub POST) succeeded.
-            if backup_tmp_path and backup_path and (not (args.lock_backup and os.path.exists(backup_path))):
-                os.replace(backup_tmp_path, backup_path)
-            _write_state({
-                "backup_path": backup_path,
-                "last_outputs": outputs,
-                "last_url": args.url,
-                "last_output_format": args.output_format,
-            })
-        except Exception:
-            pass
+            dests =  ", ".join([f"{k}" if k != "file" else f"file:{p}" for k, p in outputs])
+            sort_msg = f"sorted ({args.sort})" if args.sort is not None else "original order"
+            status_bits = []
+            if args.undo_last:
+                status_bits.append('undo applied')
+            if posted:
+                status_bits.append('saved to hub')
+            if did_undo:
+                status_bits.append('then undone')
+            status = '; '.join(status_bits) if status_bits else 'completed'
 
-        print(f"{ok('OK:')} {status}. {len(final_tiles)} tile(s) written to {dests} ({sort_msg}).", file=_sys.stderr)
+            print(f"{ok('OK:')} {status}. {len(final_tiles)} tile(s) written to {dests} ({sort_msg}).", file=sys.stderr)
