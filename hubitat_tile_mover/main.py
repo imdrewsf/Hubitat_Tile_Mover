@@ -93,14 +93,14 @@ def _parse_trim_modes(trim_value: Optional[str], legacy_left: bool, legacy_top: 
 
 
 def _backup_path_for_url(dashboard_url: str) -> str:
-    """Backup filename derived from host + dashboard id (stored in CWD)."""
+    """Backup filename derived from host + dashboard id (stored in app data dir)."""
     import re
     import urllib.parse
     u = urllib.parse.urlparse(dashboard_url)
     host = (u.hostname or "hub").replace(":", "_")
     m = re.search(r"/dashboard/(\d+)", u.path)
     dash = m.group(1) if m else "dashboard"
-    return f"hubitat_tile_mover_backup_{host}_{dash}.json"
+    return os.path.join(_app_data_dir(), f"hubitat_tile_mover_backup_{host}_{dash}.json")
 
 def _write_backup(path: str, obj: object) -> None:
     import json
@@ -124,8 +124,26 @@ def _write_temp_merge_source(obj: object) -> str:
     return path
 
 
+def _app_data_dir() -> str:
+    """Return a per-user writable directory for state/backup files."""
+    base = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
+    if not base:
+        base = os.path.expanduser("~")
+        # Prefer XDG on Unix-like systems
+        xdg = os.getenv("XDG_STATE_HOME") or os.getenv("XDG_DATA_HOME")
+        if xdg:
+            base = xdg
+    path = os.path.join(base, "hubitat_tile_mover")
+    try:
+        os.makedirs(path, exist_ok=True)
+    except Exception:
+        # Fall back to CWD if the directory can't be created for some reason
+        return os.getcwd()
+    return path
+
+
 def _state_path() -> str:
-    return "hubitat_tile_mover_last_run.json"
+    return os.path.join(_app_data_dir(), "hubitat_tile_mover_last_run.json")
 
 def _write_state(state: dict) -> None:
     import json
@@ -146,7 +164,9 @@ def kind_to_default_output_format(kind: str) -> str:
 
 def main(argv: Optional[List[str]] = None) -> None:
     import sys as _sys
+    import copy as _copy
 
+    did_undo = False
     if argv is None:
         argv = _sys.argv[1:]
 
@@ -183,20 +203,31 @@ def main(argv: Optional[List[str]] = None) -> None:
         if any(x for x in forbidden if x):
             die("--undo_last cannot be combined with other actions. Use -h for help.")
 
-        if not os.path.exists(_state_path()):
+        # Load last-run state (new location). Fall back to legacy CWD file if present.
+        st_path = _state_path()
+        if not os.path.exists(st_path) and os.path.exists("hubitat_tile_mover_last_run.json"):
+            st_path = "hubitat_tile_mover_last_run.json"
+        if not os.path.exists(st_path):
             die("No last-run state found; nothing to undo.")
-        st = _read_state()
+        try:
+            import json as _json
+            with open(st_path, "r", encoding="utf-8") as f:
+                st = _json.load(f)
+        except Exception:
+            die("Last-run state file exists but could not be read. Try re-running your last command, or delete the state file.")
 
-        backup_path = st.get("backup_path")
-        if (not backup_path or not os.path.exists(backup_path)) and args.url:
-            # If the user specified a URL, try the derived per-dashboard backup path.
-            cand = _backup_path_for_url(args.url)
-            if os.path.exists(cand):
-                backup_path = cand
-        if not backup_path or not os.path.exists(backup_path):
-            die("Backup file not found; nothing to undo.")
-
-        obj = _read_backup(backup_path)
+        # Prefer embedded backup object (global last-run) so undo works for file/clipboard imports.
+        obj = st.get("backup_obj")
+        if obj is None:
+            backup_path = st.get("backup_path")
+            if (not backup_path or not os.path.exists(backup_path)) and args.url:
+                # If the user specified a URL, try the derived per-dashboard backup path.
+                cand = _backup_path_for_url(args.url)
+                if os.path.exists(cand):
+                    backup_path = cand
+            if not backup_path or not os.path.exists(backup_path):
+                die("Backup file not found; nothing to undo.")
+            obj = _read_backup(backup_path)
         kind, full_container, tiles_any = extract_tiles_container(obj, verbose=args.verbose, debug=args.debug)
         from .jsonio import normalize_tiles_list as _ntl
         tiles = _ntl(tiles_any, verbose=args.verbose, debug=args.debug)
@@ -246,6 +277,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         from .jsonio import load_json_from_text
         input_text = read_input_text(import_kind, import_path)
         obj = load_json_from_text(input_text, verbose=args.verbose, debug=args.debug)
+
+    # Keep an immutable copy of the imported JSON for --undo_last.
+    # (The main flow mutates `obj` in-place.)
+    original_obj = _copy.deepcopy(obj)
 
     # Determine if any operation was requested
     do_left, do_top = _parse_trim_modes(args.trim, getattr(args, "trim_left", False), getattr(args, "trim_top", False))
@@ -315,7 +350,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         for k, v in outputs:
             outs_desc.append(f"{k}({v})" if v else k)
 
-        vlog(True, "=== tile_sorter.py planned actions ===")
+        vlog(True, "=== hubitat_tile_mover planned actions ===")
         vlog(True, f"Import: {import_kind}{' ' + import_path if import_path else ''}")
         vlog(True, f"Outputs: {', '.join(outs_desc)}")
         vlog(True, f"Output format: {args.output_format}")
@@ -683,6 +718,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
         debug=args.debug,
+        show_map=show_map,
+        map_focus=map_focus,
         )
 
     elif args.crop_to_range:
@@ -697,6 +734,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
         debug=args.debug,
+        show_map=show_map,
+        map_focus=map_focus,
         )
 
     elif args.prune_except_ids:
@@ -850,6 +889,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         if backup_tmp_path and backup_path and (not (args.lock_backup and os.path.exists(backup_path))):
             os.replace(backup_tmp_path, backup_path)
         _write_state({
+            # Global last-run backup (works for file/clipboard/hub imports)
+            "backup_obj": original_obj,
+            # Optional per-dashboard backup path (only meaningful when args.url is provided)
             "backup_path": backup_path,
             "last_outputs": outputs,
             "last_url": args.url,
@@ -859,17 +901,13 @@ def main(argv: Optional[List[str]] = None) -> None:
         pass
 
     if not args.quiet:
-            from .util import ok
+        dests = ", ".join([f"{k}" if k != "file" else f"file:{p}" for k, p in outputs])
+        sort_msg = f"sorted ({args.sort})" if args.sort is not None else "original order"
+        status_bits = []
+        if posted:
+            status_bits.append("saved to hub")
+        if did_undo:
+            status_bits.append("then undone")
+        status = "; ".join(status_bits) if status_bits else "completed"
 
-            dests =  ", ".join([f"{k}" if k != "file" else f"file:{p}" for k, p in outputs])
-            sort_msg = f"sorted ({args.sort})" if args.sort is not None else "original order"
-            status_bits = []
-            if args.undo_last:
-                status_bits.append('undo applied')
-            if posted:
-                status_bits.append('saved to hub')
-            if did_undo:
-                status_bits.append('then undone')
-            status = '; '.join(status_bits) if status_bits else 'completed'
-
-            print(f"{ok('OK:')} {status}. {len(final_tiles)} tile(s) written to {dests} ({sort_msg}).", file=sys.stderr)
+        print(f"{ok('OK:')} {status}. {len(final_tiles)} tile(s) written to {dests} ({sort_msg}).", file=sys.stderr)

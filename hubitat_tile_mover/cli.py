@@ -423,7 +423,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     css_grp = p.add_argument_group("CSS")
     css_grp.add_argument("--cleanup_css", "--cleanup-css", action="store_true", help="Remove tile-specific CSS rules for deleted/cleared tiles (best-effort)")
-    css_grp.add_argument("--ignore_css", "--create-css", action="store_true", help="Do NOT create/copy tile-specific CSS rules for new ids when copying/merging (default is to create/copy)")
+    css_grp.add_argument("--ignore_css", "--ignore-css", action="store_true", help="Do NOT create/copy tile-specific CSS rules for new ids when copying/merging (default is to create/copy)")
+    # Legacy (no-op): historically enabled CSS creation; now creation/copy is the default.
+    css_grp.add_argument("--create_css", "--create-css", dest="legacy_create_css", action="store_true", help=argparse.SUPPRESS)
     css_grp.add_argument("--scrub_css", "--scrub-css", action="store_true", help="Remove orphan tile-specific CSS rules (no matching tile id) after actions")
 
     diag_grp = p.add_argument_group("Diagnostics")

@@ -1,21 +1,26 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .geometry import ranges_overlap, rects_overlap
 from .tiles import as_int, rect, tile_col_extent, tile_row_extent
 from .util import format_id_sample, prompt_yes_no_or_die, vlog
 from .util import die as _die
+from .map_view import render_tile_map
 
 
 def _warn_and_prompt(
     force: bool,
     op_name: str,
-    removed_ids: List[int],
+    removed_tiles: list,
+    removed_ids: list,
     *,
     extra_warning: str = "",
     verbose: bool,
     debug: bool,
+    show_map: bool = False,
+    map_focus: str = 'full',
+    all_tiles: Optional[list] = None,
 ) -> None:
     if not removed_ids:
         return
@@ -30,6 +35,12 @@ def _warn_and_prompt(
             # Keep this readable for normal users.
             friendly += " Note: some tiles overlap the kept range but do not start inside it (because --include_overlap is not set)."
     friendly += " Are you sure you want to continue?"
+
+    if show_map and removed_tiles and all_tiles is not None:
+        import sys as _sys
+        mark_rects = [rect(t) for t in removed_tiles]
+        bounds_rects = mark_rects if map_focus == 'conflict' else None
+        print(render_tile_map(all_tiles, title='BEFORE MAP (TO BE REMOVED)', mark_rects=mark_rects, bounds_rects=bounds_rects), end='', file=_sys.stderr)
 
     prompt_yes_no_or_die(
         force,
@@ -49,6 +60,8 @@ def crop_to_rows(
     force: bool,
     verbose: bool,
     debug: bool,
+    show_map: bool = False,
+    map_focus: str = 'full',
 ) -> List[int]:
     if start_row <= 0 or end_row <= 0:
         _die("--crop_to_rows values must be positive (1-based).")
@@ -87,7 +100,7 @@ def crop_to_rows(
             f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
         )
 
-    _warn_and_prompt(force, f"crop_to_rows {start_row}..{end_row}", removed_ids, extra_warning=extra, verbose=verbose, debug=debug)
+    _warn_and_prompt(force, f"crop_to_rows {start_row}..{end_row}", removed, removed_ids, extra_warning=extra, verbose=verbose, debug=debug, show_map=show_map, map_focus=map_focus, all_tiles=tiles)
     tiles[:] = keep
     vlog(verbose, f"[crop_to_rows] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
@@ -102,6 +115,8 @@ def crop_to_cols(
     force: bool,
     verbose: bool,
     debug: bool,
+    show_map: bool = False,
+    map_focus: str = 'full',
 ) -> List[int]:
     if start_col <= 0 or end_col <= 0:
         _die("--crop_to_cols values must be positive (1-based).")
@@ -137,7 +152,7 @@ def crop_to_cols(
             f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
         )
 
-    _warn_and_prompt(force, f"crop_to_cols {start_col}..{end_col}", removed_ids, extra_warning=extra, verbose=verbose, debug=debug)
+    _warn_and_prompt(force, f"crop_to_cols {start_col}..{end_col}", removed, removed_ids, extra_warning=extra, verbose=verbose, debug=debug, show_map=show_map, map_focus=map_focus, all_tiles=tiles)
     tiles[:] = keep
     vlog(verbose, f"[crop_to_cols] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
@@ -154,6 +169,8 @@ def crop_to_range(
     force: bool,
     verbose: bool,
     debug: bool,
+    show_map: bool = False,
+    map_focus: str = 'full',
 ) -> List[int]:
     if min(top_row, left_col, bottom_row, right_col) <= 0:
         _die("--crop_to_range values must be positive (1-based).")
@@ -192,7 +209,7 @@ def crop_to_range(
             f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
         )
 
-    _warn_and_prompt(force, f"crop_to_range {top_row},{left_col}..{bottom_row},{right_col}", removed_ids, extra_warning=extra, verbose=verbose, debug=debug)
+    _warn_and_prompt(force, f"crop_to_range {top_row},{left_col}..{bottom_row},{right_col}", removed, removed_ids, extra_warning=extra, verbose=verbose, debug=debug, show_map=show_map, map_focus=map_focus, all_tiles=tiles)
     tiles[:] = keep
     vlog(verbose, f"[crop_to_range] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
