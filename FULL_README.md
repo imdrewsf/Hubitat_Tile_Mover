@@ -50,6 +50,7 @@ Span calculations:
 - **No sorting occurs unless `--sort:<spec>` is provided.**
 - Default sort priority when sorting is requested is **index, row, col** (`irc`).
 - If `--sort` is omitted, tiles preserve **original input order**.
+- Sorting only affects the order tiles appear in the layout JSON code.
 
 ---
 
