@@ -36,7 +36,7 @@ python hubitat_tile_mover.py --insert_cols 2 15 --row_range 4 32
 Move columns 1–14 to start at 85 and save back to hub.  Show the layout before and after maps:
 
 ```bash
-python hubitat_tile_mover.py --import:hub --url "<dashboard-url>" --move_cols 1 14 85 --output:hub --show_map
+python hubitat_tile_mover.py --import:hub --url "<dashboard_local_url>" --move_cols 1 14 85 --output:hub --show_map
 ```
 
 Copy tiles in the rectangular range 1,1 to 2,20 to a new location at 40,40:
@@ -66,9 +66,9 @@ python hubitat_tile_mover.py --undo_last
 Insert 5 columns in a dashboard at column 10, then merge (copy) tiles from another dashboard into the inserted space.
 
 ```bash
-python hubitat_tile_mover.py --import:hub --url "<dashboard-url>" --output:clipboard --insert_cols 5 10
+python hubitat_tile_mover.py --import:hub --url "<dashboard_local_url>" --output:clipboard --insert_cols 5 10
 
-python hubitat_tile_mover.py --import:clipboard --url "<dashboard-url>" --output:hub --merge_url: "<other-dashboard-url>" --merge_cols 15 20 10 
+python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --output:hub --merge_url: "<other_dashboard_url>" --merge_cols 15 20 10 
 ```
 
 ---
@@ -92,7 +92,7 @@ Exactly one import method is used. If not specified, clipboard is the default.
 
 ### Hub import required option
 
-- `--url "<dashboard-url>"`
+- `--url "<dashboard_local_url>"`
 
 Dashboard URL format (typical):
 
@@ -221,7 +221,7 @@ Merge copies tiles from another layout into this layout.
 Source selection:
 
 - `--merge_source <filename>` — load source JSON from file
-- `--merge_url "<dashboard-url>"` — fetch source JSON from hub
+- `--merge_url "<other_dashboard_local_url>"` — fetch source JSON from hub
 
 Then one of:
 
