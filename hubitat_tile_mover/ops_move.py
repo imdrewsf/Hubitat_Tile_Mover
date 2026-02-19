@@ -87,11 +87,23 @@ def move_cols(
                 focus = conflict_rects_from_details(conflicts_by_mid)
                 moved_rects = [moved_rect(t) for t in moving]
                 bounds_rects = None
-                if map_focus == 'full':
+                full_like = (map_focus == 'full' or map_focus == 'no_scale')
+                if full_like:
                     bounds_rects = [rect(t) for t in stationary] + moved_rects
                 elif map_focus == 'conflict':
                     bounds_rects = focus
-                print(render_tile_map(stationary, title='CONFLICT MAP', focus_rects=focus, bounds_rects=bounds_rects, highlight_rects=moved_rects), end='', file=_sys.stderr)
+                print(
+                    render_tile_map(
+                        stationary,
+                        title='CONFLICT MAP',
+                        focus_rects=focus,
+                        bounds_rects=bounds_rects,
+                        highlight_rects=moved_rects,
+                        no_scale=(map_focus == 'no_scale'),
+                    ),
+                    end='',
+                    file=_sys.stderr,
+                )
             except Exception:
                 pass
         die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
@@ -158,11 +170,23 @@ def move_rows(
                 focus = conflict_rects_from_details(conflicts_by_mid)
                 moved_rects = [moved_rect(t) for t in moving]
                 bounds_rects = None
-                if map_focus == 'full':
+                full_like = (map_focus == 'full' or map_focus == 'no_scale')
+                if full_like:
                     bounds_rects = [rect(t) for t in stationary] + moved_rects
                 elif map_focus == 'conflict':
                     bounds_rects = focus
-                print(render_tile_map(stationary, title='CONFLICT MAP', focus_rects=focus, bounds_rects=bounds_rects, highlight_rects=moved_rects), end='', file=_sys.stderr)
+                print(
+                    render_tile_map(
+                        stationary,
+                        title='CONFLICT MAP',
+                        focus_rects=focus,
+                        bounds_rects=bounds_rects,
+                        highlight_rects=moved_rects,
+                        no_scale=(map_focus == 'no_scale'),
+                    ),
+                    end='',
+                    file=_sys.stderr,
+                )
             except Exception:
                 pass
         die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
@@ -246,11 +270,23 @@ def move_range(
                 focus = conflict_rects_from_details(conflicts_by_mid)
                 moved_rects = [moved_rect(t) for t in moving]
                 bounds_rects = None
-                if map_focus == 'full':
+                full_like = (map_focus == 'full' or map_focus == 'no_scale')
+                if full_like:
                     bounds_rects = [rect(t) for t in stationary] + moved_rects
                 elif map_focus == 'conflict':
                     bounds_rects = focus
-                print(render_tile_map(stationary, title='CONFLICT MAP', focus_rects=focus, bounds_rects=bounds_rects, highlight_rects=moved_rects), end='', file=_sys.stderr)
+                print(
+                    render_tile_map(
+                        stationary,
+                        title='CONFLICT MAP',
+                        focus_rects=focus,
+                        bounds_rects=bounds_rects,
+                        highlight_rects=moved_rects,
+                        no_scale=(map_focus == 'no_scale'),
+                    ),
+                    end='',
+                    file=_sys.stderr,
+                )
             except Exception:
                 pass
         die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")

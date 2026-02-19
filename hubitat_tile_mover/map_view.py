@@ -44,6 +44,7 @@ def render_tile_map(
     mark_rects: Optional[Sequence[Rect]] = None,
     mark_color: str = 'orange',
     focus_color: str = 'red',
+    no_scale: bool = False,
 ) -> str:
     """
     Render a small ASCII minimap of tiles to stderr-friendly text.
@@ -66,19 +67,30 @@ def render_tile_map(
     if bounds is None:
         bounds = _bounds_from_rects(tile_rects)
     assert bounds is not None
-    bounds = _expand_bounds(bounds, pad=1)
+    # In the default scaled minimap, add a small pad for readability.
+    # In no-scale mode, the map is intended to match layout dimensions
+    # (1 character per dashboard row/col), so do not pad.
+    bounds = _expand_bounds(bounds, pad=0 if no_scale else 1)
 
     br1, br2, bc1, bc2 = bounds
     rows = max(1, br2 - br1 + 1)
     cols = max(1, bc2 - bc1 + 1)
 
-    w = max(20, width)
-    h = max(8, height)
+    if no_scale:
+        # 1 row/col == 1 character (not counting the border)
+        w = max(1, cols)
+        h = max(1, rows)
+    else:
+        w = max(20, width)
+        h = max(8, height)
 
     # 0 empty, 1 unchanged, 2 green (changed/highlight), 3 conflict overlay, 4 mark overlay (e.g., to-be-deleted)
     grid = [[0 for _ in range(w)] for _ in range(h)]
 
     def to_xy(r: int, c: int) -> Tuple[int, int]:
+        if no_scale:
+            # Direct grid coordinates (1:1)
+            return (r - br1, c - bc1)
         x = int((c - bc1) * (w - 1) / max(1, cols - 1))
         y = int((r - br1) * (h - 1) / max(1, rows - 1))
         return (y, x)
@@ -166,7 +178,7 @@ def render_tile_map(
         f"{title}\n"
         f"Bounds: rows {br1}..{br2}, cols {bc1}..{bc2} | tiles: {len(tiles)}\n"
         f"Legend: {_c('90','█')} tile  {_c('32;1','█')} changed  "
-        f"{(_c('38;5;208;1','█') + ' remove  ') if mark_rects else ''}"
+        f"{(_c('38;5;208;1','█') + ' affected  ') if mark_rects else ''}"
         f"{(_c('33;1','█') if focus_color=='yellow' else _c('31;1','█'))} conflict  · empty\n"
     )
     body_lines = [top]

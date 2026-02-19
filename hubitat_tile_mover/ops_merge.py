@@ -78,12 +78,23 @@ def _conflict_scan_and_append(
             focus = conflict_rects_from_details(conflicts_by_mid)
             try:
                 focus_arg = focus if map_focus == 'conflict' else None
-                tiles_for_map = dest_tiles if map_focus == 'full' else (stationary + copies)
+                tiles_for_map = dest_tiles if (map_focus == 'full' or map_focus == 'no_scale') else (stationary + copies)
                 # Conflict map: gray=stationary, green=moving/copied (non-conflict), red=conflict
                 tiles_for_map = stationary
                 hi_rects = [rect(t) for t in copies]
-                bounds_rects = [rect(t) for t in dest_tiles] if map_focus == 'full' else (focus if map_focus == 'conflict' else None)
-                print(render_tile_map(tiles_for_map, title='CONFLICT MAP', focus_rects=focus, bounds_rects=bounds_rects, highlight_rects=hi_rects), end='')
+                full_like = (map_focus == 'full' or map_focus == 'no_scale')
+                bounds_rects = [rect(t) for t in dest_tiles] if full_like else (focus if map_focus == 'conflict' else None)
+                print(
+                    render_tile_map(
+                        tiles_for_map,
+                        title='CONFLICT MAP',
+                        focus_rects=focus,
+                        bounds_rects=bounds_rects,
+                        highlight_rects=hi_rects,
+                        no_scale=(map_focus == 'no_scale'),
+                    ),
+                    end='',
+                )
             except Exception:
                 pass
         die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")

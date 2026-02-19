@@ -40,7 +40,17 @@ def _warn_and_prompt(
         import sys as _sys
         mark_rects = [rect(t) for t in removed_tiles]
         bounds_rects = mark_rects if map_focus == 'conflict' else None
-        print(render_tile_map(all_tiles, title='BEFORE MAP (TO BE REMOVED)', mark_rects=mark_rects, bounds_rects=bounds_rects), end='', file=_sys.stderr)
+        print(
+            render_tile_map(
+                all_tiles,
+                title='BEFORE MAP (TO BE REMOVED)',
+                mark_rects=mark_rects,
+                bounds_rects=bounds_rects,
+                no_scale=(map_focus == 'no_scale'),
+            ),
+            end='',
+            file=_sys.stderr,
+        )
 
     prompt_yes_no_or_die(
         force,
@@ -223,12 +233,16 @@ def _parse_csv_tokens(csv: str) -> List[str]:
     return parts
 
 
+
 def prune_except_ids(
     tiles: List[Dict[str, Any]],
     *,
     ids_csv: str,
     force: bool,
     verbose: bool,
+    debug: bool,
+    show_map: bool = False,
+    map_focus: str = "full",
 ) -> List[int]:
     id_tokens = _parse_csv_tokens(ids_csv)
     keep_ids: Set[int] = set()
@@ -245,11 +259,24 @@ def prune_except_ids(
 
     if not keep:
         _die("prune_except_ids: no tiles matched the provided id list (at least one tile must remain).")
+
     removed_ids = [as_int(t, "id") for t in removed]
-    _warn_and_prompt(force, f"prune_except_ids {ids_csv}", removed_ids, verbose=verbose, debug=debug)
+    _warn_and_prompt(
+        force,
+        f"prune_except_ids {ids_csv}",
+        removed,
+        removed_ids,
+        verbose=verbose,
+        debug=debug,
+        show_map=show_map,
+        map_focus=map_focus,
+        all_tiles=tiles,
+    )
+
     tiles[:] = keep
     vlog(verbose, f"[prune_except_ids] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
+
 
 
 def prune_except_devices(
@@ -258,6 +285,9 @@ def prune_except_devices(
     devices_csv: str,
     force: bool,
     verbose: bool,
+    debug: bool,
+    show_map: bool = False,
+    map_focus: str = "full",
 ) -> List[int]:
     dev_tokens = _parse_csv_tokens(devices_csv)
     keep_devs: Set[str] = set(dev_tokens)
@@ -274,8 +304,21 @@ def prune_except_devices(
 
     if not keep:
         _die("prune_except_devices: no tiles matched the provided device list (at least one tile must remain).")
+
     removed_ids = [as_int(t, "id") for t in removed]
-    _warn_and_prompt(force, f"prune_except_devices {devices_csv}", removed_ids, verbose=verbose, debug=debug)
+    _warn_and_prompt(
+        force,
+        f"prune_except_devices {devices_csv}",
+        removed,
+        removed_ids,
+        verbose=verbose,
+        debug=debug,
+        show_map=show_map,
+        map_focus=map_focus,
+        all_tiles=tiles,
+    )
+
     tiles[:] = keep
     vlog(verbose, f"[prune_except_devices] kept {len(keep)} tile(s), removed {len(removed)} tile(s)")
     return removed_ids
+

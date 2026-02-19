@@ -25,7 +25,15 @@ from .ops_move import move_cols, move_range, move_rows
 from .ops_trim import trim_tiles
 from .map_view import render_tile_map
 from .sort_tiles import complete_sort_spec, sort_tiles
-from .tiles import verify_tiles_minimum, as_int
+from .geometry import ranges_overlap, rects_overlap
+from .selectors import (
+    select_tiles_by_col_range,
+    select_tiles_by_rect_range,
+    select_tiles_by_row_range,
+    tile_matches_col_range,
+    tile_matches_row_range,
+)
+from .tiles import verify_tiles_minimum, as_int, tile_row_extent, tile_col_extent, rect as tile_rect
 from .css_ops import (
     cleanup_css_for_tile_ids,
     generate_css_for_id_map,
@@ -50,6 +58,208 @@ def _parse_inclusive_range(name: str, pair: Optional[List[int]]) -> Optional[Tup
     return (a, b)
 
 
+def _compute_before_map_mark_rects(
+    args,
+    tiles: List[Dict],
+    *,
+    col_range: Optional[Tuple[int, int]],
+    row_range: Optional[Tuple[int, int]],
+    has_trim: bool,
+) -> List[Tuple[int, int, int, int]]:
+    """Return rects (r1,r2,c1,c2) to mark in the BEFORE map as affected by the requested action(s)."""
+
+    include_overlap = bool(getattr(args, "include_overlap", False))
+
+    marked_ids: set[int] = set()
+    marked_tiles: List[Dict] = []
+
+    def add(ts: List[Dict]) -> None:
+        for t in ts:
+            tid = as_int(t, "id")
+            if tid in marked_ids:
+                continue
+            marked_ids.add(tid)
+            marked_tiles.append(t)
+
+    # Trim affects all tiles.
+    if has_trim and tiles:
+        add(list(tiles))
+
+    # Insert shifts tiles at/after the insertion point (and straddlers when include_overlap).
+    if getattr(args, "insert_rows", None):
+        _count, at_row = args.insert_rows
+        for t in tiles:
+            if not tile_matches_col_range(t, col_range, include_overlap):
+                continue
+            r0 = as_int(t, "row")
+            if r0 >= at_row:
+                add([t])
+            elif include_overlap:
+                r1, r2 = tile_row_extent(t)
+                if r1 < at_row <= r2:
+                    add([t])
+
+    if getattr(args, "insert_cols", None):
+        _count, at_col = args.insert_cols
+        for t in tiles:
+            if not tile_matches_row_range(t, row_range, include_overlap):
+                continue
+            c0 = as_int(t, "col")
+            if c0 >= at_col:
+                add([t])
+            elif include_overlap:
+                c1, c2 = tile_col_extent(t)
+                if c1 < at_col <= c2:
+                    add([t])
+
+    # Move / Copy: mark the selected source tiles.
+    if getattr(args, "move_cols", None):
+        s, e, _d = args.move_cols
+        if s > e:
+            s, e = e, s
+        add(select_tiles_by_col_range(tiles, s, e, include_overlap=include_overlap))
+
+    if getattr(args, "move_rows", None):
+        s, e, _d = args.move_rows
+        if s > e:
+            s, e = e, s
+        add(select_tiles_by_row_range(tiles, s, e, include_overlap=include_overlap))
+
+    if getattr(args, "move_range", None):
+        r1, c1, r2, c2, _dr, _dc = args.move_range
+        tr, br = (r1, r2) if r1 <= r2 else (r2, r1)
+        lc, rc = (c1, c2) if c1 <= c2 else (c2, c1)
+        add(select_tiles_by_rect_range(tiles, tr, lc, br, rc, include_overlap=include_overlap))
+
+    if getattr(args, "copy_cols", None):
+        s, e, _d = args.copy_cols
+        if s > e:
+            s, e = e, s
+        add(select_tiles_by_col_range(tiles, s, e, include_overlap=include_overlap))
+
+    if getattr(args, "copy_rows", None):
+        s, e, _d = args.copy_rows
+        if s > e:
+            s, e = e, s
+        add(select_tiles_by_row_range(tiles, s, e, include_overlap=include_overlap))
+
+    if getattr(args, "copy_range", None):
+        r1, c1, r2, c2, _dr, _dc = args.copy_range
+        tr, br = (r1, r2) if r1 <= r2 else (r2, r1)
+        lc, rc = (c1, c2) if c1 <= c2 else (c2, c1)
+        add(select_tiles_by_rect_range(tiles, tr, lc, br, rc, include_overlap=include_overlap))
+
+    # Delete / Clear: mark tiles selected for removal (not the shifted tiles).
+    if getattr(args, "delete_rows", None):
+        s, e = args.delete_rows
+        if s > e:
+            s, e = e, s
+        selected = [
+            t
+            for t in select_tiles_by_row_range(tiles, s, e, include_overlap=include_overlap)
+            if tile_matches_col_range(t, col_range, include_overlap)
+        ]
+        add(selected)
+
+    if getattr(args, "delete_cols", None):
+        s, e = args.delete_cols
+        if s > e:
+            s, e = e, s
+        selected = [
+            t
+            for t in select_tiles_by_col_range(tiles, s, e, include_overlap=include_overlap)
+            if tile_matches_row_range(t, row_range, include_overlap)
+        ]
+        add(selected)
+
+    if getattr(args, "clear_rows", None):
+        s, e = args.clear_rows
+        if s > e:
+            s, e = e, s
+        add(select_tiles_by_row_range(tiles, s, e, include_overlap=include_overlap))
+
+    if getattr(args, "clear_cols", None):
+        s, e = args.clear_cols
+        if s > e:
+            s, e = e, s
+        add(select_tiles_by_col_range(tiles, s, e, include_overlap=include_overlap))
+
+    if getattr(args, "clear_range", None):
+        r1, c1, r2, c2 = args.clear_range
+        tr, br = (r1, r2) if r1 <= r2 else (r2, r1)
+        lc, rc = (c1, c2) if c1 <= c2 else (c2, c1)
+        add(select_tiles_by_rect_range(tiles, tr, lc, br, rc, include_overlap=include_overlap))
+
+    # Crop: mark tiles that will be removed.
+    if getattr(args, "crop_to_rows", None):
+        s, e = args.crop_to_rows
+        if s > e:
+            s, e = e, s
+        removed: List[Dict] = []
+        for t in tiles:
+            if include_overlap:
+                r1, r2 = tile_row_extent(t)
+                ok = ranges_overlap(r1, r2, s, e)
+            else:
+                r0 = as_int(t, "row")
+                ok = (s <= r0 <= e)
+            if not ok:
+                removed.append(t)
+        add(removed)
+
+    if getattr(args, "crop_to_cols", None):
+        s, e = args.crop_to_cols
+        if s > e:
+            s, e = e, s
+        removed: List[Dict] = []
+        for t in tiles:
+            if include_overlap:
+                c1, c2 = tile_col_extent(t)
+                ok = ranges_overlap(c1, c2, s, e)
+            else:
+                c0 = as_int(t, "col")
+                ok = (s <= c0 <= e)
+            if not ok:
+                removed.append(t)
+        add(removed)
+
+    if getattr(args, "crop_to_range", None):
+        r1, c1, r2, c2 = args.crop_to_range
+        tr, br = (r1, r2) if r1 <= r2 else (r2, r1)
+        lc, rc = (c1, c2) if c1 <= c2 else (c2, c1)
+        sel_rect = (tr, br, lc, rc)
+        removed: List[Dict] = []
+        for t in tiles:
+            if include_overlap:
+                ok = rects_overlap(tile_rect(t), sel_rect)
+            else:
+                rr = as_int(t, "row")
+                cc = as_int(t, "col")
+                ok = (tr <= rr <= br) and (lc <= cc <= rc)
+            if not ok:
+                removed.append(t)
+        add(removed)
+
+    # Prune: mark tiles that will be removed.
+    if getattr(args, "prune_except_ids", None):
+        csv = str(args.prune_except_ids or "")
+        toks = [p.strip() for p in csv.split(",") if p.strip()]
+        keep_ids = {int(t) for t in toks if t.lstrip("+-").isdigit()}
+        removed = [t for t in tiles if as_int(t, "id") not in keep_ids]
+        add(removed)
+
+    if getattr(args, "prune_except_devices", None):
+        csv = str(args.prune_except_devices or "")
+        keep = {p.strip() for p in csv.split(",") if p.strip()}
+        removed: List[Dict] = []
+        for t in tiles:
+            dev = t.get("device", None)
+            dev_s = "" if dev is None else str(dev).strip()
+            if dev_s not in keep:
+                removed.append(t)
+        add(removed)
+
+    return [tile_rect(t) for t in marked_tiles]
 
 def _parse_trim_modes(trim_value: Optional[str], legacy_left: bool, legacy_top: bool) -> Tuple[bool, bool]:
     """
@@ -187,6 +397,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     show_map = bool(getattr(args, 'show_map', False))
     map_focus = getattr(args, 'map_focus', 'full')
+    no_scale = (map_focus == 'no_scale')
 
     # --undo_last is a standalone restore action.
     # It restores the previous backup and writes it to the last output destinations unless --output/--output_to is provided.
@@ -386,7 +597,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             fd, backup_tmp_path = tempfile.mkstemp(prefix="hubitat_tile_mover_backup_", suffix=".json")
             os.close(fd)
             _write_backup(backup_tmp_path, obj)
-            backup_obj = obj
+            backup_obj = _copy.deepcopy(obj)  # immutable snapshot
     kind, full_container, tiles_any = extract_tiles_container(obj, verbose=args.verbose, debug=args.debug)
     if using_hub_output and kind != "full_object":
         die("--output:hub requires FULL layout JSON input (cannot use minimal/bare).")
@@ -418,9 +629,61 @@ def main(argv: Optional[List[str]] = None) -> None:
         verify_tiles_minimum(tiles_any)
     tiles: List[Dict] = tiles_any  # type: ignore[assignment]
     tiles_before_map = [dict(t) for t in tiles]
-    before_pos = {int(t.get('id')): (int(t.get('row')), int(t.get('col')), int(t.get('rowSpan', 1)), int(t.get('colSpan', 1))) for t in tiles if t.get('id') is not None}
+    def _span_len(ext):
+        return int(ext[1]) - int(ext[0]) + 1
+
+    before_pos = {
+        as_int(t, "id"): (
+            as_int(t, "row"),
+            as_int(t, "col"),
+            _span_len(tile_row_extent(t)),
+            _span_len(tile_col_extent(t)),
+        )
+        for t in tiles
+        if t.get("id") is not None
+    }
+    before_mark_rects = _compute_before_map_mark_rects(args, tiles_before_map, col_range=col_range, row_range=row_range, has_trim=has_trim)
     if args.show_map:
-        print(render_tile_map(tiles_before_map, title='BEFORE MAP'), end='', file=_sys.stderr)
+        bounds_rects = before_mark_rects if (map_focus == 'conflict' and before_mark_rects) else None
+        title = 'BEFORE MAP'
+        if before_mark_rects:
+            # Match earlier UX for destructive operations, while also covering move/copy/insert.
+            destructive = any(
+                getattr(args, k, None)
+                for k in (
+                    'delete_rows',
+                    'delete_cols',
+                    'clear_rows',
+                    'clear_cols',
+                    'clear_range',
+                    'crop_to_rows',
+                    'crop_to_cols',
+                    'crop_to_range',
+                    'prune_except_ids',
+                    'prune_except_devices',
+                )
+            )
+            if destructive:
+                title = 'BEFORE MAP (TO BE REMOVED)'
+            elif any(getattr(args, k, None) for k in ('move_cols', 'move_rows', 'move_range')):
+                title = 'BEFORE MAP (TO BE MOVED)'
+            elif any(getattr(args, k, None) for k in ('copy_cols', 'copy_rows', 'copy_range')):
+                title = 'BEFORE MAP (TO BE COPIED)'
+            elif any(getattr(args, k, None) for k in ('insert_rows', 'insert_cols')) or has_trim:
+                title = 'BEFORE MAP (TO BE SHIFTED)'
+            else:
+                title = 'BEFORE MAP (AFFECTED)'
+        print(
+            render_tile_map(
+                tiles_before_map,
+                title=title,
+                mark_rects=before_mark_rects,
+                bounds_rects=bounds_rects,
+                no_scale=no_scale,
+            ),
+            end='',
+            file=_sys.stderr,
+        )
 
     # Treat tile ids referenced in customCSS as reserved for id assignment (avoids collisions with orphaned CSS).
     css_key_pre, css_text_pre = get_custom_css(obj)
@@ -461,8 +724,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -477,8 +740,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -496,8 +759,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -513,8 +776,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -530,8 +793,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -550,8 +813,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -568,8 +831,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -588,8 +851,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -611,8 +874,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-        show_map=args.show_map,
-        map_focus=getattr(args,'map_focus','full'),
+            show_map=args.show_map,
+            map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -631,8 +894,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
-        show_map=show_map,
-        map_focus=map_focus,
         )
 
     elif args.delete_cols:
@@ -646,8 +907,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
-        show_map=show_map,
-        map_focus=map_focus,
         )
 
     elif args.clear_rows:
@@ -660,8 +919,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
-            show_map=show_map,
-            map_focus=map_focus,
         )
 
     elif args.clear_cols:
@@ -674,8 +931,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
-            show_map=show_map,
-            map_focus=map_focus,
         )
 
     elif args.clear_range:
@@ -690,8 +945,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
-            show_map=show_map,
-            map_focus=map_focus,
         )
 
     elif args.crop_to_rows:
@@ -703,9 +956,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
-        debug=args.debug,
-        show_map=show_map,
-        map_focus=map_focus,
+            debug=args.debug,
         )
 
     elif args.crop_to_cols:
@@ -717,9 +968,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
-        debug=args.debug,
-        show_map=show_map,
-        map_focus=map_focus,
+            debug=args.debug,
         )
 
     elif args.crop_to_range:
@@ -733,9 +982,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             force=args.force,
             verbose=args.verbose,
-        debug=args.debug,
-        show_map=show_map,
-        map_focus=map_focus,
+            debug=args.debug,
         )
 
     elif args.prune_except_ids:
@@ -744,6 +991,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             ids_csv=args.prune_except_ids,
             force=args.force,
             verbose=args.verbose,
+            debug=args.debug,
         )
 
     elif args.prune_except_devices:
@@ -752,6 +1000,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             devices_csv=args.prune_except_devices,
             force=args.force,
             verbose=args.verbose,
+            debug=args.debug,
         )
     # Post-op CSS handling
     css_key, css_text = get_custom_css(obj)
@@ -797,51 +1046,70 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Sort last (only when --sort is present; otherwise preserve original tile order).
     final_tiles = sort_tiles(tiles, args.sort) if args.sort is not None else tiles
+
+    # Track which tiles changed position (or are new) for maps and strict overlap checks.
+    after_pos = {
+        as_int(t, "id"): (
+            as_int(t, "row"),
+            as_int(t, "col"),
+            _span_len(tile_row_extent(t)),
+            _span_len(tile_col_extent(t)),
+        )
+        for t in final_tiles
+        if t.get("id") is not None
+    }
+    changed_ids = {tid for tid, apos in after_pos.items() if before_pos.get(tid) != apos}
+
+    # Backstop overlap detector: find the first overlap pair between a changed/new tile
+    # and an unchanged tile. Overlaps *within* the moved/copied/merged set are allowed
+    # (e.g., already-overlapped source tiles should remain overlapped after move/copy).
+    def _first_overlap_changed_vs_unchanged(ts: List[Dict[str, Any]]) -> Tuple[int, int, Tuple[int, int, int, int]] | None:
+        rects = [(as_int(t, "id"), tile_rect(t)) for t in ts]
+        n = len(rects)
+        for i in range(n):
+            id1, r1 = rects[i]
+            for j in range(i + 1, n):
+                id2, r2 = rects[j]
+                # Only detect overlaps where exactly one tile is changed/new.
+                if (id1 in changed_ids) == (id2 in changed_ids):
+                    continue
+                if rects_overlap(r1, r2):
+                    or1 = max(r1[0], r2[0])
+                    or2 = min(r1[1], r2[1])
+                    oc1 = max(r1[2], r2[2])
+                    oc2 = min(r1[3], r2[3])
+                    return id1, id2, (or1, or2, oc1, oc2)
+        return None
+
     if args.show_map:
-        after_pos = {int(t.get('id')): (int(t.get('row')), int(t.get('col')), int(t.get('rowSpan', 1)), int(t.get('colSpan', 1))) for t in final_tiles if t.get('id') is not None}
-        changed_ids = {tid for tid, apos in after_pos.items() if before_pos.get(tid) != apos}
-        # Compute overlap rects between changed tiles and unchanged tiles (outcome conflicts).
-        def _tile_rect(t):
-            r = int(t.get('row')); c = int(t.get('col'))
-            rs = int(t.get('rowSpan', 1)); cs = int(t.get('colSpan', 1))
-            return (r, r + rs - 1, c, c + cs - 1)
+        conflict_rects: List[Tuple[int, int, int, int]] = []
+        if changed_ids:
+            changed_tiles = [t for t in final_tiles if as_int(t, "id") in changed_ids]
+            unchanged_tiles = [t for t in final_tiles if as_int(t, "id") not in changed_ids]
+            for mt in changed_tiles:
+                mrect = tile_rect(mt)
+                for st in unchanged_tiles:
+                    srect = tile_rect(st)
+                    if rects_overlap(mrect, srect):
+                        or1 = max(mrect[0], srect[0])
+                        or2 = min(mrect[1], srect[1])
+                        oc1 = max(mrect[2], srect[2])
+                        oc2 = min(mrect[3], srect[3])
+                        conflict_rects.append((or1, or2, oc1, oc2))
 
-        changed_tiles = [t for t in final_tiles if int(t.get('id')) in changed_ids]
-        unchanged_tiles = [t for t in final_tiles if t.get('id') is not None and int(t.get('id')) not in changed_ids]
-
-        conflict_rects = []
-        for mt in changed_tiles:
-            mr1, mr2, mc1, mc2 = _tile_rect(mt)
-            for st in unchanged_tiles:
-                sr1, sr2, sc1, sc2 = _tile_rect(st)
-                ir1 = max(mr1, sr1); ir2 = min(mr2, sr2)
-                ic1 = max(mc1, sc1); ic2 = min(mc2, sc2)
-                if ir1 <= ir2 and ic1 <= ic2:
-                    conflict_rects.append((ir1, ir2, ic1, ic2))
-
-        focus_color = 'yellow' if getattr(args, 'allow_overlap', False) else 'red'
-
-        print(render_tile_map(final_tiles, title='OUTCOME MAP', changed_ids=changed_ids, focus_rects=conflict_rects, focus_color=focus_color), end='', file=_sys.stderr)
-
-        # confirm/undo (prompt after outcome map, before any outputs are written)
-        did_undo = False
-        if args.confirm_keep and (backup_obj is not None) and (not args.undo_last):
-            keep = prompt_yes_no(args.force, 'Keep these changes?', default_yes=True)
-            if not keep:
-                did_undo = True
-                # Restore entire original JSON (including tiles/customCSS/etc.) from backup
-                obj = backup_obj
-                kind, full_container, tiles_any = extract_tiles_container(obj, verbose=args.verbose, debug=args.debug)
-                # Tile list validation
-                # Some actions (merge, scrub_css) can run even when the dashboard has no tiles yet.
-                has_tiles = bool(tiles_any)
-                merge_like = bool(args.merge_source or args.merge_url) and bool(args.merge_cols or args.merge_rows or args.merge_range)
-                scrub_like = bool(args.scrub_css)
-                if has_tiles or (not (merge_like or scrub_like or show_map_only)):
-                    verify_tiles_minimum(tiles_any)
-                final_tiles = tiles_any  # type: ignore[assignment]
-
-
+        focus_color = "yellow" if getattr(args, "allow_overlap", False) else "red"
+        print(
+            render_tile_map(
+                final_tiles,
+                title="OUTCOME MAP",
+                changed_ids=changed_ids,
+                focus_rects=conflict_rects,
+                focus_color=focus_color,
+                no_scale=no_scale,
+            ),
+            end="",
+            file=_sys.stderr,
+        )
     # CSS orphan detection / scrub (performed last, after sorting).
     if css_key is not None:
         _, css_text2 = get_custom_css(obj)
@@ -866,6 +1134,40 @@ def main(argv: Optional[List[str]] = None) -> None:
                 f"Use --scrub_css to remove. IDs: {format_id_sample(list(orphans))}"
             )
 
+    # Strict overlap guard (extra safety): for move/copy/merge in strict mode, ensure the result has no overlaps
+    # involving any changed tile. (Pre-flight checks should normally prevent this; this is a backstop.)
+    overlap_ops = bool(
+        args.move_cols
+        or args.move_rows
+        or args.move_range
+        or args.copy_cols
+        or args.copy_rows
+        or args.copy_range
+        or args.merge_cols
+        or args.merge_rows
+        or args.merge_range
+    )
+    if overlap_ops and (not args.allow_overlap) and (not args.skip_overlap):
+        ov = _first_overlap_changed_vs_unchanged(final_tiles)
+        if ov is not None:
+            id1, id2, orect = ov
+            if args.show_map:
+                print(
+                    render_tile_map(
+                        final_tiles,
+                        title="CONFLICT MAP (OUTCOME)",
+                        focus_rects=[orect],
+                        focus_color="red",
+                        no_scale=no_scale,
+                    ),
+                    end="",
+                    file=_sys.stderr,
+                )
+            die(
+                f"Overlapping tiles detected in result: id={id1} overlaps id={id2} at r{orect[0]}..{orect[1]},c{orect[2]}..{orect[3]}. "
+                "Re-run with --allow_overlap or --skip_overlap."
+            )
+
     output_obj = build_output_object(kind, full_container, final_tiles, args.output_format)
 
     out_text = dump_json(output_obj, indent=args.indent, minify=args.minify)
@@ -882,6 +1184,45 @@ def main(argv: Optional[List[str]] = None) -> None:
             hub_ctx, _tmp = hub_import_layout(args.url, verbose=False, debug=False)
         post_url_used = hub_post_layout_with_refresh(args.url, hub_ctx.layout_url, output_obj, verbose=args.verbose, debug=args.debug)
         posted = True
+
+    # Optional: write changes first, then prompt to keep; if not kept, restore the backup to the same outputs.
+    if args.confirm_keep and (not args.undo_last):
+        from .util import prompt_yes_no
+
+        keep = prompt_yes_no(args.force, "Keep these changes?", default_yes=True)
+        if not keep:
+            did_undo = True
+
+            restore_src = backup_obj if backup_obj is not None else original_obj
+            restore_obj = _copy.deepcopy(restore_src)
+            r_kind, r_container, r_tiles_any = extract_tiles_container(restore_obj, verbose=args.verbose, debug=args.debug)
+
+            r_output_format = args.output_format
+            if using_hub_output:
+                if r_kind != "full_object":
+                    die("Cannot restore to hub because the backup is not FULL dashboard JSON.")
+                r_output_format = "full"
+
+            restore_output_obj = build_output_object(r_kind, r_container, r_tiles_any, r_output_format)
+            restore_text = dump_json(restore_output_obj, indent=args.indent, minify=args.minify)
+            if not restore_text.endswith("\n"):
+                restore_text += "\n"
+
+            # Rewrite non-hub outputs.
+            write_outputs(non_hub_outputs, args.newline, restore_text)
+
+            # Restore hub output (posts backup layout back to dashboard).
+            if using_hub_output:
+                post_url_used = hub_post_layout_with_refresh(
+                    args.url, hub_ctx.layout_url, restore_output_obj, verbose=args.verbose, debug=args.debug
+                )
+                posted = True
+
+            # Update status counters to reflect the final (restored) content.
+            output_obj = restore_output_obj
+            out_text = restore_text
+            final_tiles = r_tiles_any
+
 
     # Commit backup (atomic) and persist last-run state for --undo_last defaults.
     try:
@@ -902,7 +1243,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if not args.quiet:
         dests = ", ".join([f"{k}" if k != "file" else f"file:{p}" for k, p in outputs])
-        sort_msg = f"sorted ({args.sort})" if args.sort is not None else "original order"
+        sort_msg = "original order (restored)" if did_undo else (f"sorted ({args.sort})" if args.sort is not None else "original order")
         status_bits = []
         if posted:
             status_bits.append("saved to hub")

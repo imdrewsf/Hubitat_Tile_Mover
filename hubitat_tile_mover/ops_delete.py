@@ -29,7 +29,7 @@ def delete_rows(
     map_focus: str = 'full',
 ) -> List[int]:
     if start_row <= 0 or end_row <= 0:
-        _die("--delete_cols values must be positive (1-based).")
+        _die("--delete_rows values must be positive (1-based).")
     if start_row > end_row:
         start_row, end_row = end_row, start_row
 
@@ -68,6 +68,7 @@ def delete_rows(
                     title="BEFORE MAP (TO BE REMOVED)",
                     mark_rects=mark_rects,
                     bounds_rects=bounds_rects,
+                    no_scale=(map_focus == 'no_scale'),
                 ),
                 end="",
                 file=_sys.stderr,
@@ -155,6 +156,7 @@ def delete_cols(
                     title="BEFORE MAP (TO BE REMOVED)",
                     mark_rects=mark_rects,
                     bounds_rects=bounds_rects,
+                    no_scale=(map_focus == 'no_scale'),
                 ),
                 end="",
                 file=_sys.stderr,

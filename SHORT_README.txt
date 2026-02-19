@@ -110,7 +110,7 @@ ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
 
   Layout Maps: (Show in terminal before and after layouts, movement conflicts)
     --show_map                 (print BEFORE / OUTCOME maps)
-    --map_focus full|conflict  (default: full; conflict maps only)
+    --map_focus full|conflict|no_scale  (default: full; conflict maps only)
     Note: Show map can be used without an action to display the current layout of the import dashboard.
 
 MODIFIERS

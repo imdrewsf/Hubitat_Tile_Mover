@@ -359,6 +359,8 @@ Note: Program will warn if orphans are found after an action completes.
   Always show full layout (scaled)
   `--map_focus:conflict`
   Show zoomed in view of tiles layout conflicts, otherwise show default full view.
+`--map_focus:no_scale`
+  Don't scale layout maps.  A character is rendered for every row / column.
 
 Map semantics (intent):
 

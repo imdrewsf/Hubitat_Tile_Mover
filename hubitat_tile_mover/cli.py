@@ -70,7 +70,8 @@ Hubitat direct mode:
 
 Maps:
   --show_map                 (print BEFORE / OUTCOME maps)
-  --map_focus full|conflict  (default: full; conflict maps only)
+  --map_focus full|conflict|no_scale
+                            (default: full; no_scale disables minimap scaling)
 
 Diagnostics:
   --quiet                    (suppress status line)
@@ -204,7 +205,8 @@ MODIFIERS
     --include_overlap
       Default selection: tiles are selected when their top-left (row,col) is inside the source/range.
       With --include_overlap: tiles are also selected when their span intersects the source/range
-      (span uses rowSpan/colSpan; missing span defaults to 1x1).
+      (span uses rowSpan/colSpan when present; best-effort fallbacks include width/height,
+       sizeX/sizeY, xSpan/ySpan, tileWidth/tileHeight, cols/rows, and nested size:{x,y}).
 
   Insert/Delete range filters (limit which tiles are affected):
     --col_range <start_col> <end_col>     (only with --insert_rows and --delete_rows)
@@ -229,9 +231,10 @@ MAPS
       Print a BEFORE MAP (input) and OUTCOME MAP (after applying the action).
       In the outcome map: changed tiles are green; overlap portions are red (or yellow with --allow_overlap).
 
-  --map_focus full|conflict
-      full: show the full bounds of the layout (default)
-      conflict: zoom to the conflict/overlap region
+  --map_focus full|conflict|no_scale
+      full: show the full bounds of the layout (default; scaled to fit terminal)
+      conflict: zoom to the conflict/overlap region (scaled)
+      no_scale: 1 row/col == 1 character (map matches layout size; may be very large)
 
   Notes:
       Some operations may also print a CONFLICT MAP when destination conflicts are detected.
@@ -430,8 +433,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     diag_grp = p.add_argument_group("Diagnostics")
     diag_grp.add_argument("--show_map", dest="show_map", action="store_true", help="Show BEFORE/AFTER ASCII layout maps in the terminal")
-    diag_grp.add_argument("--map_focus", dest="map_focus", choices=["full","conflict"], default="full",
-                          help="When printing conflict maps, show full bounds or focus on conflict area (default: full)")
+    diag_grp.add_argument(
+        "--map_focus",
+        dest="map_focus",
+        choices=["full", "conflict", "no_scale"],
+        default="full",
+        help="Map bounds focus for maps (full/conflict) and scaling mode (no_scale disables scaling; default: full)",
+    )
     diag_grp.add_argument("--verbose", action="store_true", help="Verbose output to STDERR")
     diag_grp.add_argument("--debug", action="store_true", help="Debug output (very verbose) to STDERR")
     diag_grp.add_argument("--quiet", action="store_true", help="Suppress final status line")
