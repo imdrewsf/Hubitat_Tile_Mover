@@ -66,7 +66,7 @@ python hubitat_tile_mover.py --undo_last
 Insert 5 columns in a dashboard at column 10, then merge (copy) tiles from another dashboard into the inserted space.
 
 ```bash
-python hubitat_tile_mover.py --import:hub --url "<dashboard-url>" --output:clipboard " --insert_cols 5 10
+python hubitat_tile_mover.py --import:hub --url "<dashboard-url>" --output:clipboard --insert_cols 5 10
 
 python hubitat_tile_mover.py --import:clipboard --url "<dashboard-url>" --output:hub --merge_url: "<other-dashboard-url>" --merge_cols 15 20 10 ```
 ```
@@ -153,20 +153,20 @@ Allows down-level output (full→minimal/bare). If omitted, output defaults to m
 
 ## Insert
 
-- `--insert_rows COUNT AT_ROW`
+- `--insert_rows <count> <at_row>`
   Increase `row` by COUNT for tiles at/after AT_ROW, and optionally straddlers.
   
   Modifiers:
   
   - `--include_overlap`
   - `--col_range <start_col> <end_col>` (insert_rows only)
-- `--insert_cols COUNT AT_COL`
+- `--insert_cols <count> <at_col>`
   Increase `col` by COUNT for tiles at/after AT_COL, and optionally straddlers.
   
   Modifiers:
   
   - `--include_overlap`
-  - `--row_range <start_row> <end_row>` (insert_cols only)
+  - `--row_range <start_row> <end row>` (insert_cols only)
 
 Range filters:
 
@@ -177,9 +177,9 @@ Range filters:
 
 ## Move
 
-- `--move_cols START_COL END_COL DEST_START_COL`
-- `--move_rows START_ROW END_ROW DEST_START_ROW`
-- `--move_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL`
+- `--move_cols <start_col> <end_col> <dest_start_col>`
+- `--move_rows <start_row> <end_row> <dest_start_row>`
+- `--move_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
 
 Modifiers:
 
@@ -200,9 +200,9 @@ Overlaps among the moving/copying tiles themselves are allowed.
 
 Same as Move, but originals remain and copies are appended with new IDs.
 
-- `--copy_cols START_COL END_COL DEST_START_COL`
-- `--copy_rows START_ROW END_ROW DEST_START_ROW`
-- `--copy_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL`
+- `--copy_cols <start_col> <end_col> <dest_start_col>`
+- `--copy_rows <start_row> <end_row> <dest_start_row>`
+- `--copy_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
 
 ID allocation for new tiles:
 
@@ -240,8 +240,8 @@ CSS behavior:
 
 ## Delete (remove + shift)
 
-- `--delete_rows START_ROW END_ROW`
-- `--delete_cols START_COL END_COL`
+- `--delete_rows <start_row> <end_row>`
+- `--delete_cols <start_col> <end_col>`
 
 Deletes selected tiles then shifts remaining tiles to close the gap.
 
@@ -255,9 +255,9 @@ Modifiers:
 
 ## Clear (remove without shifting)
 
-- `--clear_rows START_ROW END_ROW`
-- `--clear_cols START_COL END_COL`
-- `--clear_range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL`
+- `--clear_rows <start_row> <end_row>`
+- `--clear_cols <start_col> <end_col>`
+- `--clear_range <top_row> <left_col> <bottom_row> <right_col>`
 
 Modifiers:
 
@@ -269,9 +269,9 @@ Modifiers:
 
 ## Crop (keep only tiles inside)
 
-- `--crop_to_rows START_ROW END_ROW`
-- `--crop_to_cols START_COL END_COL`
-- `--crop_to_range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL`
+- `--crop_to_rows <start_row> <end_row>`
+- `--crop_to_cols <start_col> <end_col>`
+- `--crop_to_range <top_row> <left_col> <bottom_row> <right_col>`
 
 Rules:
 
@@ -397,13 +397,6 @@ Map semantics (intent):
 
 ### Input JSON shapes (three “levels”)
 
-Hub import flow:
-
-1) GET dashboard URL
-2) Extract`javascriptRequestToken`
-3) Build layout URL (port`:8080`, insert`/layout`, add`requestToken`)
-4) GET layout JSON
-   <br>
 
 The tool accepts three input shapes. The input “level” determines what can be output.
 
@@ -430,9 +423,9 @@ The tool accepts three input shapes. The input “level” determines what can b
 
 ### Output format constraints
 
-- Output can be**equal to or “lower” than** the detected input level.
-- Output can**not exceed** the input level.
-- When`--output:hub` is used, output must be**full**, so input must be**full**.
+- Output can be **equal to or “lower” than** the detected input level.
+- Output can **not exceed** the input level.
+- When`--output:hub` is used, output must be **full**, so input must be **full**.
 
 ### Tile fields the tool edits
 
@@ -449,17 +442,17 @@ Span calculations:
   - rows:`row .. row + rowSpan - 1` (default rowSpan=1)
   - cols:`col .. col + colSpan - 1` (default colSpan=1)
 
-### Sorting behavior
+Hub import flow:
 
-- **No sorting occurs unless `--sort:<spec>` is provided.**
-- Default sort priority when sorting is requested is**index, row, col** (`irc`).
-- If`--sort` is omitted, tiles preserve**original input order**.
+1) GET dashboard URL
+2) Extract`javascriptRequestToken`
+3) Build layout URL (port`:8080`, insert`/layout`, add`requestToken`)
+4) GET layout JSON
+   <br>---
 
----
 
 
-
-  Copyright 2025 Andrew Peck
+  Copyright 2026 Andrew Peck
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
