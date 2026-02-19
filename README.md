@@ -68,7 +68,7 @@ Insert 5 columns in a dashboard at column 10, then merge (copy) tiles from anoth
 ```bash
 python hubitat_tile_mover.py --import:hub --url "<dashboard-url>" --output:clipboard --insert_cols 5 10
 
-python hubitat_tile_mover.py --import:clipboard --url "<dashboard-url>" --output:hub --merge_url: "<other-dashboard-url>" --merge_cols 15 20 10 ```
+python hubitat_tile_mover.py --import:clipboard --url "<dashboard-url>" --output:hub --merge_url: "<other-dashboard-url>" --merge_cols 15 20 10 
 ```
 
 ---
@@ -465,3 +465,4 @@ Hub import flow:
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
