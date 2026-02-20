@@ -21,7 +21,7 @@ A command-line utility to make mass changes to tile layout in Hubitat Dashboard 
 * **Output/Save** dashboard layout JSON to: clipboard (default) • files • directly to Hubitat dashboard • terminal
   <br>
 * **Visual Maps**: Before and after views, easily see layout conflicts.
-![multimap](https://github.com/user-attachments/assets/547d6dc4-8ab6-4d50-817c-17b7efb767cb)
+  ![multimap](https://github.com/user-attachments/assets/547d6dc4-8ab6-4d50-817c-17b7efb767cb)
 
 ---
 
@@ -68,7 +68,7 @@ Insert 5 columns in a dashboard at column 10, then merge (copy) tiles from anoth
 ```bash
 python hubitat_tile_mover.py --import:hub --url "<dashboard_local_url>" --output:clipboard --insert_cols 5 10
 
-python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --output:hub --merge_url: "<other_dashboard_url>" --merge_cols 15 20 10 
+python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --output:hub --merge_url: "<other_dashboard_url>" --merge_cols 15 20 10
 ```
 
 ---
@@ -77,7 +77,7 @@ python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --
 
 ### Help
 
-- `-h`,`--help` — Short help
+- `-h`, `--help` — Short help
 - `--help_full` — Full detailed help
 
 ---
@@ -111,7 +111,6 @@ Destinations are repeatable. If none specified, clipboard is the default.
 - `--output:file <filename>` — Write to file.
 - `--output:hub` — POST full layout JSON back to Hubitat using`--url`.
 
-
 ### Hub output safeguards
 
 `--output:hub` is allowed when:
@@ -142,10 +141,10 @@ Allows down-level output (full→minimal/bare). If omitted, output defaults to m
    insert, move, copy, merge, delete, clear, crop, prune
 2) **Add-on actions** (can run alone or after a primary operation):
 
-- maps:`--show_map`
-- trim:`--trim` /`--trim:top` /`--trim:left`
-- sort:`--sort:<spec>`
-- scrub CSS:`--scrub_css`
+- maps: `--show_map`
+- trim: `--trim` / `--trim:top` / `--trim:left`
+- sort: `--sort:<spec>`
+- scrub CSS: `--scrub_css`
 
 `--undo_last` is standalone and supersedes all other actions.
 
@@ -153,81 +152,97 @@ Allows down-level output (full→minimal/bare). If omitted, output defaults to m
 
 ## Insert
 
-- `--insert_rows <count> <at_row>`
-  Increase `row` by COUNT for tiles at/after AT_ROW, and optionally straddlers.
+- Actions:
+  - `--insert_rows <count> <at_row>`
+    Increase `row` by COUNT for tiles at/after AT_ROW, and optionally straddlers.
   
-  Modifiers:
+    Selection Modifiers:
   
-  - `--include_overlap`
-  - `--col_range <start_col> <end_col>` (insert_rows only)
-- `--insert_cols <count> <at_col>`
-  Increase `col` by COUNT for tiles at/after AT_COL, and optionally straddlers.
+    - `--include_overlap`
+    - `--col_range <start_col> <end_col>` (insert_rows only)
+    <br>
   
-  Modifiers:
+  - `--insert_cols <count> <at_col>`
+    Increase `col` by COUNT for tiles at/after AT_COL, and optionally straddlers.
   
-  - `--include_overlap`
-  - `--row_range <start_row> <end row>` (insert_cols only)
-
-Range filters:
-
-- Without`--include_overlap`: match by starting row/col.
-- With`--include_overlap`: match by span overlap.
+    Selection Modifiers:
+  
+    - `--include_overlap`
+    - `--row_range <start_row> <end row>` (insert_cols only)
+    <br>
+- Notes
+  
+  - `--include_overlap` includes tiles which begin (top-left corner) outside of the range, but extend into it.
 
 ---
 
 ## Move
 
-- `--move_cols <start_col> <end_col> <dest_start_col>`
-- `--move_rows <start_row> <end_row> <dest_start_row>`
-- `--move_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
+- Actions:
+  - `--move_cols <start_col> <end_col> <dest_start_col>`
+  - `--move_rows <start_row> <end_row> <dest_start_row>`
+  - `--move_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
+  
+- Selection Modifiers:
+  
+  - `--include_overlap`
+  
+- Conflict policy (move/copy/merge):
+  
+  - `--allow_overlap` — ignore conflicts and allow moved tiles to overlap existing tiles at the destination.
+  - `--skip_overlap` — skip tiles that would conflict, move all others.
+    <br>
 
-Modifiers:
-
-- `--include_overlap`
-
-Conflict policy (move/copy/merge):
-
-- `--allow_overlap` — proceed even if destination overlaps exist.
-- `--skip_overlap` — skip tiles that would conflict.
-- default: if any conflicts exist, abort before moving anything.
-
-Conflict detection is evaluated **once before** moving/copying, against **stationary destination tiles only**.
-Overlaps among the moving/copying tiles themselves are allowed.
+- Notes:
+  
+  - Default behavior: if any conflicts exist, abort before moving anything.
+  - Conflict detection is evaluated **once, \*before\*** moving/copying, against **existing destination tiles only**.  Any tiles that are being copied/moved can be overlapped and will not be considered in conflict.  
 
 ---
 
 ## Copy
 
-Same as Move, but originals remain and copies are appended with new IDs.
+Same as Move, but originals remain and copies are appended with new IDs. Existing tile specific CSS rules in customCSS can be optionally copied with the new IDs
 
-- `--copy_cols <start_col> <end_col> <dest_start_col>`
-- `--copy_rows <start_row> <end_row> <dest_start_row>`
-- `--copy_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
+- Actions:
+  - `--copy_cols <start_col> <end_col> <dest_start_col>`
+  - `--copy_rows <start_row> <end_row> <dest_start_row>`
+  - `--copy_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
+<br>
 
-ID allocation for new tiles:
+- Selection Modifiers:
+  
+  - `--include_overlap`
+  
+- Conflict policy (move/copy/merge):
+  
+  - `--allow_overlap` — ignore conflicts and allow moved tiles to overlap existing tiles at the destination.
+  - `--skip_overlap` — skip tiles that would conflict, move all others.
+    <br>
 
-```
-max(max_tile_id_in_tiles, max_tile_id_referenced_in_customCSS) + 1
-```
+- Custom Tile CSS Rules: 
+  - `--ignore_css` — disables creating/copying CSS for new IDs.
+<br>
 
-Increment for each new tile.
+- Notes:
+  - ID allocation for new tiles:  New IDs are created sequentially beginning starting with 1 + max(highest existing tile ID, highest referenced tile ID in customCSS).  This prevents any orphaned CSS rules from being applied to new tiles.
+  - By default, customCSS is checked for any tile specific CSS rules for copied tiles.  Any rules found are duplicated for the new tile id
 
 ---
 
 ## Merge
 
-Merge copies tiles from another layout into this layout.
+Copy tiles from another dashboard layout into this layout.
 
-Source selection:
+- Required: source selection:
 
-- `--merge_source <filename>` — load source JSON from file
-- `--merge_url "<other_dashboard_local_url>"` — fetch source JSON from hub
+  - `--merge_source <filename>` — load source JSON from file
+  - `--merge_url "<other_dashboard_local_url>"` — fetch source JSON from hub
 
-Then one of:
 
-- `--merge_cols ...`
-- `--merge_rows ...`
-- `--merge_range ...`
+- `--merge_cols <start_col> <end_col> <dest_start_col>`
+- `--merge_rows <start_row> <end_row> <dest_start_row>`
+- `--merge_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
 
 Same overlap/conflict and ID rules as Copy.
 
@@ -359,7 +374,7 @@ Note: Program will warn if orphans are found after an action completes.
   Always show full layout (scaled)
   `--map_focus:conflict`
   Show zoomed in view of tiles layout conflicts, otherwise show default full view.
-`--map_focus:no_scale`
+  `--map_focus:no_scale`
   Don't scale layout maps.  A character is rendered for every row / column.
 
 Map semantics (intent):
@@ -399,18 +414,17 @@ Map semantics (intent):
 
 ### Input JSON shapes (three “levels”)
 
-
 The tool accepts three input shapes. The input “level” determines what can be output.
 
 1) **Full layout JSON**
-   A full object containing`"tiles"` plus other fields (e.g.,`"customCSS"`):
+   A full object containing `"tiles"` plus other fields (e.g., `"customCSS"`):
 
 ```json
 { "...": "...", "tiles": [ { ... }, ... ], "...": "..." }
 ```
 
 2) **Minimal container**
-   An object containing only`"tiles"`:
+   An object containing only `"tiles"`:
 
 ```json
 { "tiles": [ { ... }, ... ] }
@@ -427,7 +441,7 @@ The tool accepts three input shapes. The input “level” determines what can b
 
 - Output can be **equal to or “lower” than** the detected input level.
 - Output can **not exceed** the input level.
-- When`--output:hub` is used, output must be **full**, so input must be **full**.
+- When `--output:hub` is used, output must be **full**, so input must be **full**.
 
 ### Tile fields the tool edits
 
@@ -441,31 +455,30 @@ All other tile fields are preserved.
 Span calculations:
 
 - A tile occupies:
-  - rows:`row .. row + rowSpan - 1` (default rowSpan=1)
-  - cols:`col .. col + colSpan - 1` (default colSpan=1)
+  - rows: `row .. row + rowSpan - 1` (default rowSpan=1)
+  - cols: `col .. col + colSpan - 1` (default colSpan=1)
 
 Hub import flow:
 
 1) GET dashboard URL
-2) Extract`javascriptRequestToken`
-3) Build layout URL (port`:8080`, insert`/layout`, add`requestToken`)
+2) Extract `javascriptRequestToken`
+3) Build layout URL (port `:8080`, insert `/layout`, add `requestToken`)
 4) GET layout JSON
    <br>---
 
+Copyright 2026 Andrew Peck
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-  Copyright 2026 Andrew Peck
+```
+http://www.apache.org/licenses/LICENSE-2.0
+```
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 

@@ -531,8 +531,16 @@ def main(argv: Optional[List[str]] = None) -> None:
         or args.prune_except_ids
         or args.prune_except_devices
     )
-    if not (has_movement or has_trim or args.scrub_css or (args.sort is not None or args.order is not None)):
-        die("No operation specified. Use one movement/edit option and/or trim and/or --sort and/or --scrub_css. Use -h for help.")
+
+    has_sort = bool((args.sort is not None) or (getattr(args, "order", None) is not None))
+    # Standalone map view mode: --show_map with no other actions.
+    # This mode should only render the imported layout map and still check for orphan CSS.
+    view_only = bool(getattr(args, "show_map", False)) and not (has_movement or has_trim or args.scrub_css or has_sort)
+
+    if not (has_movement or has_trim or args.scrub_css or has_sort or view_only):
+        die(
+            "No operation specified. Use one movement/edit option and/or trim and/or --sort and/or --scrub_css, or use --show_map to view the imported layout. Use -h for help."
+        )
 
     # Validate range filters usage
     if args.col_range and not (args.insert_rows or args.delete_rows):
@@ -586,7 +594,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     backup_obj = None
     backup_tmp_path = None
     # Backup is required for hub output and for --confirm_keep (and for hub import, as a restore point).
-    if args.url and (using_hub_import or using_hub_output or args.confirm_keep) and (not args.undo_last):
+    # In standalone map view mode, do not create/overwrite backups.
+    if (not view_only) and args.url and (using_hub_import or using_hub_output or args.confirm_keep) and (not args.undo_last):
         backup_path = _backup_path_for_url(args.url)
         if args.lock_backup and os.path.exists(backup_path):
             # Use existing backup as the restore point and do not overwrite it.
@@ -646,6 +655,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     if args.show_map:
         bounds_rects = before_mark_rects if (map_focus == 'conflict' and before_mark_rects) else None
         title = 'BEFORE MAP'
+        if view_only:
+            title = 'LAYOUT MAP'
+            bounds_rects = None
         if before_mark_rects:
             # Match earlier UX for destructive operations, while also covering move/copy/insert.
             destructive = any(
@@ -684,6 +696,35 @@ def main(argv: Optional[List[str]] = None) -> None:
             end='',
             file=_sys.stderr,
         )
+
+    # Standalone map view mode ends here: still check and warn for orphan CSS, but do not write outputs unless explicitly requested.
+    if view_only:
+        css_key0, css_text0 = get_custom_css(obj)
+        if css_key0 is not None:
+            css_text0 = css_text0 or ""
+            existing_ids0 = {as_int(t, "id") for t in tiles_before_map if t.get("id") is not None}
+            orphans0 = orphan_tile_ids_in_css(css_text0, existing_ids0) if css_text0 else set()
+            if orphans0 and (not args.quiet):
+                from .util import wlog, format_id_sample
+
+                wlog(
+                    f"Found {len(orphans0)} orphan CSS tile id(s) in customCSS (no matching tile). "
+                    f"Use --scrub_css to remove. IDs: {format_id_sample(list(orphans0))}"
+                )
+
+        # Explicit hub output in view-only mode is disallowed (avoid no-op POSTs).
+        if using_hub_output:
+            die("--output:hub requires an action; it is not supported with standalone --show_map.")
+
+        # If the user explicitly requested non-hub outputs, write the imported JSON unchanged.
+        if args.output_to:
+            output_obj0 = build_output_object(kind, full_container, tiles_before_map, args.output_format)
+            out_text0 = dump_json(output_obj0, indent=args.indent, minify=args.minify)
+            if not out_text0.endswith("\n"):
+                out_text0 += "\n"
+            non_hub_outputs0 = [(k, p) for (k, p) in outputs if k != 'hub']
+            write_outputs(non_hub_outputs0, args.newline, out_text0)
+        return
 
     # Treat tile ids referenced in customCSS as reserved for id assignment (avoids collisions with orphaned CSS).
     css_key_pre, css_text_pre = get_custom_css(obj)
