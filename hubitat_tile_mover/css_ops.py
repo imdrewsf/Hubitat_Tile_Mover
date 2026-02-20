@@ -11,6 +11,91 @@ _TILE_ID_PATTERNS = [
     re.compile(r"['\"]tile-(\d+)['\"]"),
 ]
 
+
+def _split_selector_list(prelude: str) -> List[str]:
+    """Split a selector list into items.
+
+    Splits on commas that are *not* inside:
+      - strings (single/double quotes)
+      - parentheses (), brackets [], or braces {}
+      - block comments /* ... */
+
+    This is intentionally lightweight (not a full CSS grammar), but it avoids
+    corrupting selector items that contain commas inside :not(...), attribute
+    selectors, etc.
+    """
+    s = prelude
+    out: List[str] = []
+    buf: List[str] = []
+    i = 0
+    n = len(s)
+    in_str: Optional[str] = None
+    depth_paren = 0
+    depth_brack = 0
+    depth_brace = 0
+
+    while i < n:
+        ch = s[i]
+
+        # comment
+        if in_str is None and ch == "/" and (i + 1) < n and s[i + 1] == "*":
+            endc = s.find("*/", i + 2)
+            if endc == -1:
+                buf.append(s[i:])
+                i = n
+                break
+            buf.append(s[i : endc + 2])
+            i = endc + 2
+            continue
+
+        # strings
+        if in_str is not None:
+            buf.append(ch)
+            if ch == "\\" and (i + 1) < n:
+                buf.append(s[i + 1])
+                i += 2
+                continue
+            if ch == in_str:
+                in_str = None
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            in_str = ch
+            buf.append(ch)
+            i += 1
+            continue
+
+        # nesting
+        if ch == "(":
+            depth_paren += 1
+        elif ch == ")":
+            depth_paren = max(0, depth_paren - 1)
+        elif ch == "[":
+            depth_brack += 1
+        elif ch == "]":
+            depth_brack = max(0, depth_brack - 1)
+        elif ch == "{":
+            depth_brace += 1
+        elif ch == "}":
+            depth_brace = max(0, depth_brace - 1)
+
+        # top-level selector separator
+        if ch == "," and depth_paren == 0 and depth_brack == 0 and depth_brace == 0:
+            item = "".join(buf).strip()
+            if item:
+                out.append(item)
+            buf = []
+            i += 1
+            continue
+
+        buf.append(ch)
+        i += 1
+
+    tail = "".join(buf).strip()
+    if tail:
+        out.append(tail)
+    return out
+
 def _selector_tile_ids(selector: str) -> Set[int]:
     ids: Set[int] = set()
     for rx in _TILE_ID_PATTERNS:
@@ -206,7 +291,7 @@ def cleanup_css_for_tile_ids(css: str, removed_ids: Iterable[int]) -> str:
             new_nodes.append(CssBlock(prelude=node.prelude, body=inner_clean.rstrip()))
             continue
 
-        selectors = [s.strip() for s in pre.split(",") if s.strip()]
+        selectors = _split_selector_list(pre)
         kept: List[str] = []
         for sel in selectors:
             sel_ids = _selector_tile_ids(sel)
@@ -244,7 +329,7 @@ def generate_css_for_id_map(source_css: str, id_map: Dict[int, int], *, dest_css
                 out_nodes.append(CssBlock(prelude=node.prelude, body=inner.rstrip()))
             continue
 
-        selectors = [s.strip() for s in pre.split(",") if s.strip()]
+        selectors = _split_selector_list(pre)
         new_selectors: List[str] = []
 
         for sel in selectors:
