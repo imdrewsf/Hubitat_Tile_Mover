@@ -153,23 +153,23 @@ Allows down-level output (full→minimal/bare). If omitted, output defaults to m
 ## Insert
 
 - Actions:
+  
   - `--insert_rows <count> <at_row>`
     Increase `row` by COUNT for tiles at/after AT_ROW, and optionally straddlers.
-  
+    
     Selection Modifiers:
-  
+    
     - `--include_overlap`
     - `--col_range <start_col> <end_col>` (insert_rows only)
-    <br>
-  
+      <br>
   - `--insert_cols <count> <at_col>`
     Increase `col` by COUNT for tiles at/after AT_COL, and optionally straddlers.
-  
+    
     Selection Modifiers:
-  
+    
     - `--include_overlap`
     - `--row_range <start_row> <end row>` (insert_cols only)
-    <br>
+      <br>
 - Notes
   
   - `--include_overlap` includes tiles which begin (top-left corner) outside of the range, but extend into it.
@@ -178,55 +178,59 @@ Allows down-level output (full→minimal/bare). If omitted, output defaults to m
 
 ## Move
 
+Moves tiles to a new location.  
+
 - Actions:
+  
   - `--move_cols <start_col> <end_col> <dest_start_col>`
   - `--move_rows <start_row> <end_row> <dest_start_row>`
   - `--move_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
-  
+   <br>
 - Selection Modifiers:
   
   - `--include_overlap`
-  
+    <br>
 - Conflict policy (move/copy/merge):
   
   - `--allow_overlap` — ignore conflicts and allow moved tiles to overlap existing tiles at the destination.
   - `--skip_overlap` — skip tiles that would conflict, move all others.
     <br>
-
 - Notes:
   
+  - Conflict detection is evaluated **once, \*before\*** moving/copying, against **existing destination tiles only**.  Any tiles that are being copied/moved can be overlapped and will not be considered in conflict.
   - Default behavior: if any conflicts exist, abort before moving anything.
-  - Conflict detection is evaluated **once, \*before\*** moving/copying, against **existing destination tiles only**.  Any tiles that are being copied/moved can be overlapped and will not be considered in conflict.  
+
 
 ---
 
 ## Copy
 
-Same as Move, but originals remain and copies are appended with new IDs. Existing tile specific CSS rules in customCSS can be optionally copied with the new IDs
+Same as Move, but originals remain.  Copies are created with new IDs. Existing tile specific CSS rules in customCSS can be optionally copied with the new IDs
 
 - Actions:
+  
   - `--copy_cols <start_col> <end_col> <dest_start_col>`
   - `--copy_rows <start_row> <end_row> <dest_start_row>`
   - `--copy_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
-<br>
-
+    <br>
 - Selection Modifiers:
   
   - `--include_overlap`
-  
 - Conflict policy (move/copy/merge):
   
   - `--allow_overlap` — ignore conflicts and allow moved tiles to overlap existing tiles at the destination.
   - `--skip_overlap` — skip tiles that would conflict, move all others.
     <br>
-
-- Custom Tile CSS Rules: 
+- Custom Tile CSS Rule Handling:
+  
   - `--ignore_css` — disables creating/copying CSS for new IDs.
-<br>
-
+    <br>
 - Notes:
+  
   - ID allocation for new tiles:  New IDs are created sequentially beginning starting with 1 + max(highest existing tile ID, highest referenced tile ID in customCSS).  This prevents any orphaned CSS rules from being applied to new tiles.
   - By default, customCSS is checked for any tile specific CSS rules for copied tiles.  Any rules found are duplicated for the new tile id
+  - Conflict detection is evaluated **once, \*before\*** moving/copying, against **existing destination tiles only**.  Any tiles that are being copied/moved can be overlapped and will not be considered in conflict.
+  - Default behavior: if any conflicts exist, abort before moving anything.
 
 ---
 
@@ -234,22 +238,34 @@ Same as Move, but originals remain and copies are appended with new IDs. Existin
 
 Copy tiles from another dashboard layout into this layout.
 
+- Actions:
+  
+  - `--merge_cols <start_col> <end_col> <dest_start_col>`
+  - `--merge_rows <start_row> <end_row> <dest_start_row>`
+  - `--merge_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
 - Required: source selection:
-
+  
   - `--merge_source <filename>` — load source JSON from file
   - `--merge_url "<other_dashboard_local_url>"` — fetch source JSON from hub
 
-
-- `--merge_cols <start_col> <end_col> <dest_start_col>`
-- `--merge_rows <start_row> <end_row> <dest_start_row>`
-- `--merge_range <src_top_row> <src_left_col> <src_bottom_row> <src_right_col> <dest_top_row> <dest_left_col>`
-
-Same overlap/conflict and ID rules as Copy.
-
-CSS behavior:
-
-- By default, tile-specific CSS is duplicated/remapped for new IDs.
-- `--ignore_css` disables creating/copying CSS for new IDs.
+- Selection Modifiers:
+  
+  - `--include_overlap`
+- Conflict policy (move/copy/merge):
+  
+  - `--allow_overlap` — ignore conflicts and allow moved tiles to overlap existing tiles at the destination.
+  - `--skip_overlap` — skip tiles that would conflict, move all others.
+    <br>
+- Custom Tile CSS Rule Handling:
+  
+  - `--ignore_css` — disables creating/copying CSS for new IDs.
+    <br>
+- Notes:
+    
+  - ID allocation for new tiles:  New IDs are created sequentially beginning starting with 1 + max(highest existing tile ID, highest referenced tile ID in customCSS).  This prevents any orphaned CSS rules from being applied to new tiles.
+  - By default, customCSS is checked for any tile specific CSS rules for copied tiles.  Any rules found are duplicated for the new tile id
+  - Conflict detection is evaluated **once, \*before\*** moving/copying, against **existing destination tiles only**.  Any tiles that are being copied/moved can be overlapped and will not be considered in conflict.
+  - Default behavior: if any conflicts exist, abort before moving anything.
 
 ---
 
