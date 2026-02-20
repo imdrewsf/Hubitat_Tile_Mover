@@ -21,7 +21,7 @@ A command-line utility to make mass changes to tile layout in Hubitat Dashboard 
 * **Output/Save** dashboard layout JSON to: clipboard (default) • files • directly to Hubitat dashboard • terminal
   <br>
 * **Visual Maps**: Before and after views, easily see layout conflicts.
-![sample_map](https://github.com/user-attachments/assets/e0983bfd-e442-44a6-85ae-735693dacbd3)
+![multimap](https://github.com/user-attachments/assets/547d6dc4-8ab6-4d50-817c-17b7efb767cb)
 
 ---
 
@@ -467,4 +467,5 @@ Hub import flow:
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
 
