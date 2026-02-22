@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import sys
 
+from . import __version__
+
 SHORT_HELP = r'''Adjust and/or edit the "tiles" list in a Hubitat Dashboard layout JSON while preserving everything else unchanged.
 
 Input JSON shapes:
@@ -82,6 +84,7 @@ Diagnostics:
 
 More help:
   --help_full
+  --version
 '''
 
 FULL_HELP = r"""hubitat_tile_mover — adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
@@ -308,6 +311,13 @@ def build_parser() -> argparse.ArgumentParser:
         allow_abbrev=False,
         # Keep argparse usage line short; help text above provides full documentation.
         usage="hubitat_tile_mover.py [options]",
+    )
+
+    p.add_argument(
+        "--version",
+        action="version",
+        version=f"hubitat_tile_mover {__version__}",
+        help="Print build version and exit.",
     )
 
     p.add_argument("--help_full", action=HelpFullAction, nargs=0, help="(see --help_full for details)")
