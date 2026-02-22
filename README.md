@@ -1,15 +1,11 @@
 ﻿# Hubitat Tile Mover
-
-A command-line utility to make mass changes to tile layout in Hubitat Dashboard layout JSON:
-
 ## Overview:
 
 ### Import, modify and output Hubitat dashboard layouts:
 
 * **Import** dashboard layouts directly from the hub • JSON files • the clipboard (default)
-  <br>
 * **Output** changed layouts directly back to the hub • JSON files • the clipboard (default)
-  <br>
+  
 
 ### Layout Actions
 
@@ -22,22 +18,19 @@ A command-line utility to make mass changes to tile layout in Hubitat Dashboard 
 * **CROP** layout (remove all tiles not in): columns, rows, range
 * **PRUNE** layout (remove all tiles listed or all tiles ***except*** those listed): tile id's, device ids
 * **TRIM** layout (remove blank rows, cols): top, left
-  <br>
+
 
 ### Features
 
-* Preserve, duplicate or remove custom CSS rules when tiles added (copied) or removed by actions
-* Prevent actions which would result in tiles be placed over existing tiles
-* Visual Layout Maps: Easily see proposed changes, potential conflicts and final outcome of actions
-  
+  * Preserve, duplicate or remove custom CSS rules when tiles added (copied) or removed by actions
+  * Prevent actions which would result in tiles be placed over existing tiles
+  * Visual Layout Maps: Easily see proposed changes, potential conflicts and final outcome of actions
   
   ![multimap](https://github.com/user-attachments/assets/547d6dc4-8ab6-4d50-817c-17b7efb767cb)
 
 ---
 
 <div style="page-break-after: always"></div>
-
----
 
 ## Layout Import Sources and Output Destinations:
 
@@ -533,14 +526,11 @@ Show before, outcome and conflict layout previews in the terminal
   python hubitat_tile_mover.py --insert_cols 2 15 --row_range 4 32
   ```
   
-  <br>
 * Move columns 1–14 to start at 85 and save back to hub.  Show the layout before and after maps:
   
   ```bash
   python hubitat_tile_mover.py --import:hub --url "<dashboard_local_url>" --move_cols 1 14 85 --output:hub --show_map
   ```
-
-<br>
 
 * Copy tiles in the rectangular range 1,1 to 2,20 to a new location at 40,40:
   
@@ -548,15 +538,11 @@ Show before, outcome and conflict layout previews in the terminal
   python hubitat_tile_mover.py --copy_range 1 1 20 20 40 40
   ```
 
-<br>
-
 * Crop to a range (delete everything outside), show maps, force, cleanup CSS, save to a file:
   
   ```bash
   python hubitat_tile_mover.py --crop_to_range 1 1 85 85 --show_map --force --cleanup_css --output:file "<filename.json>"
   ```
-
-<br>
 
 * Remove orphan CSS rules only (no tile edits) without confirmation prompt:
   
@@ -564,14 +550,13 @@ Show before, outcome and conflict layout previews in the terminal
   python hubitat_tile_mover.py --scrub_css --force
   ```
   
-  <br>
+
 * Undo last run (restore last input to last outputs unless overridden):
   
   ```bash
   python hubitat_tile_mover.py --undo_last
   ```
 
-<br>
 
 ---
 
@@ -600,7 +585,9 @@ Show before, outcome and conflict layout previews in the terminal
 
 ```bash
 python hubitat_tile_mover.py --import:hub --url "<dashboard_local_url>" --output:clipboard --insert_cols 5 10
+
 python hubitat_tile_mover.py --import:clipboard --output:clipboard --merge_url: "<other_dashboard_url>" --merge_cols 15 20 10 --lock_backup
+
 python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --output:hub --crop_to_range 10 10 40 30 --include_overlaps --force --cleanup_css --trim --lock_backup
 ```
 
@@ -608,7 +595,7 @@ python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --
 
 #### Batched Actions in Detail
 
-###### First Action
+##### The First Action (Run)
 
 1. Imports a layout from the hub
 2. Inserts 5 blank columns at column 10 in the layout
