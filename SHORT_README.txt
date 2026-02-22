@@ -79,6 +79,8 @@ LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
       Notes: the kept range must contain at least one tile; at least one tile must remain.
 
     Prune (remove everything EXCEPT matching tiles):
+      --prune_ids <comma-separated tile ids>
+      --prune_devices <comma-separated device ids>
       --prune_except_ids <comma-separated tile ids>
       --prune_except_devices <comma-separated device ids>
       Modifiers: --cleanup_css, --force
