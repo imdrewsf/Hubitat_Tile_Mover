@@ -18,7 +18,17 @@ from .jsonio import build_output_object, dump_json, extract_tiles_container, loa
 from .ops_clear import clear_cols, clear_range, clear_rows
 from .ops_copy import copy_cols, copy_rows, copy_range
 from .ops_delete import delete_cols, delete_rows
-from .ops_crop import crop_to_cols, crop_to_range, crop_to_rows, prune_except_devices, prune_except_ids
+from .ops_crop import (
+    crop_to_cols,
+    crop_to_range,
+    crop_to_rows,
+    prune_devices,
+    prune_except_devices,
+    prune_except_ids,
+    prune_ids,
+    parse_prune_device_spec,
+    parse_prune_id_spec,
+)
 from .ops_insert import insert_cols, insert_rows
 from .ops_merge import merge_cols, merge_range, merge_rows
 from .ops_move import move_cols, move_range, move_rows
@@ -242,21 +252,52 @@ def _compute_before_map_mark_rects(
 
     # Prune: mark tiles that will be removed.
     if getattr(args, "prune_except_ids", None):
-        csv = str(args.prune_except_ids or "")
-        toks = [p.strip() for p in csv.split(",") if p.strip()]
-        keep_ids = {int(t) for t in toks if t.lstrip("+-").isdigit()}
+        spec = str(args.prune_except_ids or "")
+        keep_ids = parse_prune_id_spec(spec, tiles, op_label="--prune_except_ids")
         removed = [t for t in tiles if as_int(t, "id") not in keep_ids]
         add(removed)
 
     if getattr(args, "prune_except_devices", None):
-        csv = str(args.prune_except_devices or "")
-        keep = {p.strip() for p in csv.split(",") if p.strip()}
+        spec = str(args.prune_except_devices or "")
+        keep_nums, keep_literals = parse_prune_device_spec(spec, tiles, op_label="--prune_except_devices")
         removed: List[Dict] = []
         for t in tiles:
             dev = t.get("device", None)
             dev_s = "" if dev is None else str(dev).strip()
-            if dev_s not in keep:
+            if dev_s in keep_literals:
+                continue
+            if dev_s.lstrip("+-").isdigit():
+                try:
+                    if int(dev_s) in keep_nums:
+                        continue
+                except Exception:
+                    pass
+            removed.append(t)
+        add(removed)
+
+    if getattr(args, "prune_ids", None):
+        spec = str(args.prune_ids or "")
+        remove_ids = parse_prune_id_spec(spec, tiles, op_label="--prune_ids")
+        removed = [t for t in tiles if as_int(t, "id") in remove_ids]
+        add(removed)
+
+    if getattr(args, "prune_devices", None):
+        spec = str(args.prune_devices or "")
+        rem_nums, rem_literals = parse_prune_device_spec(spec, tiles, op_label="--prune_devices")
+        removed: List[Dict] = []
+        for t in tiles:
+            dev = t.get("device", None)
+            dev_s = "" if dev is None else str(dev).strip()
+            if dev_s in rem_literals:
                 removed.append(t)
+                continue
+            if dev_s.lstrip("+-").isdigit():
+                try:
+                    if int(dev_s) in rem_nums:
+                        removed.append(t)
+                        continue
+                except Exception:
+                    pass
         add(removed)
 
     return [tile_rect(t) for t in marked_tiles]
@@ -406,7 +447,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             args.insert_rows, args.insert_cols, args.move_cols, args.move_rows, args.move_range,
             args.delete_rows, args.delete_cols, args.clear_rows, args.clear_cols, args.clear_range,
             args.crop_to_rows, args.crop_to_cols, args.crop_to_range,
-            args.prune_except_ids, args.prune_except_devices,
+            args.prune_except_ids, args.prune_except_devices, args.prune_ids, args.prune_devices,
             args.copy_cols, args.copy_rows, args.copy_range,
             args.merge_cols, args.merge_rows, args.merge_range,
             args.trim, args.sort, args.scrub_css,
@@ -530,6 +571,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         or args.crop_to_range
         or args.prune_except_ids
         or args.prune_except_devices
+        or args.prune_ids
+        or args.prune_devices
     )
 
     has_sort = bool((args.sort is not None) or (getattr(args, "order", None) is not None))
@@ -631,7 +674,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         _ga('delete_rows'), _ga('delete_cols'),
         _ga('clear_rows'), _ga('clear_cols'), _ga('clear_range'),
         _ga('crop_to_rows'), _ga('crop_to_cols'), _ga('crop_to_range'),
-        _ga('prune_except_ids'), _ga('prune_except_devices'),
+        _ga('prune_except_ids'), _ga('prune_except_devices'), _ga('prune_ids'), _ga('prune_devices'),
         _ga('scrub_css'),
     ])
     if has_tiles or (not (merge_like or scrub_like or show_map_only)):
@@ -673,6 +716,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                     'crop_to_range',
                     'prune_except_ids',
                     'prune_except_devices',
+                    'prune_ids',
+                    'prune_devices',
                 )
             )
             if destructive:
@@ -1043,6 +1088,24 @@ def main(argv: Optional[List[str]] = None) -> None:
             verbose=args.verbose,
             debug=args.debug,
         )
+
+    elif args.prune_ids:
+        deleted_ids = prune_ids(
+            tiles,
+            ids_csv=args.prune_ids,
+            force=args.force,
+            verbose=args.verbose,
+            debug=args.debug,
+        )
+
+    elif args.prune_devices:
+        deleted_ids = prune_devices(
+            tiles,
+            devices_csv=args.prune_devices,
+            force=args.force,
+            verbose=args.verbose,
+            debug=args.debug,
+        )
     # Post-op CSS handling
     css_key, css_text = get_custom_css(obj)
 
@@ -1230,7 +1293,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     if args.confirm_keep and (not args.undo_last):
         from .util import prompt_yes_no
 
-        keep = prompt_yes_no(args.force, "Keep these changes?", default_yes=True)
+        # --confirm_keep must be independent of --force. Users may use --force to suppress
+        # destructive-action prompts while still wanting the final keep/rollback confirmation.
+        keep = prompt_yes_no(False, "Keep these changes?", default_yes=True)
         if not keep:
             did_undo = True
 

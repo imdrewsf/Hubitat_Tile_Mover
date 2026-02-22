@@ -40,6 +40,8 @@ Actions (at most ONE per run):
            --crop_to_range TOP LEFT BOTTOM RIGHT
   Prune:   --prune_except_ids <id1,id2,...>
            --prune_except_devices <dev1,dev2,...>
+           --prune_ids <id1,id2,...>
+           --prune_devices <dev1,dev2,...>
   Copy:    --copy_cols START END DEST
            --copy_rows START END DEST
            --copy_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
@@ -169,10 +171,22 @@ LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
       Notes: the kept range must contain at least one tile; at least one tile must remain.
 
     Prune (remove everything EXCEPT matching tiles):
-      --prune_except_ids <comma-separated tile ids>
-      --prune_except_devices <comma-separated device ids>
+      --prune_except_ids <id-spec>
+      --prune_except_devices <device-spec>
       Modifiers: --cleanup_css, --force
       Notes: at least one tile must match the provided ids/devices; at least one tile must remain.
+
+    Prune (remove matching tiles):
+      --prune_ids <id-spec>
+      --prune_devices <device-spec>
+      Modifiers: --cleanup_css, --force
+      Notes: at least one tile must match the provided ids/devices; at least one tile must remain.
+
+      id/device specs support comma-separated values and numeric expressions:
+        1,5,8,9        (explicit ids)
+        5-10           (inclusive range)
+        <5, <=5, >5, >=5  (expands to 0..N-1 / 0..N / N+1..MAX / N..MAX)
+      For devices, numeric expressions match device strings like "0","1","2",...
 
 
 ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
@@ -396,8 +410,11 @@ def build_parser() -> argparse.ArgumentParser:
                      nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
     ops.add_argument("--crop_to_range", "--crop-to-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--prune_except_ids", "--prune-except-ids", metavar="ID1,ID2,...", type=str, help="(see --help_full for details)")
-    ops.add_argument("--prune_except_devices", "--prune-except-devices", metavar="DEV1,DEV2,...", type=str, help="(see --help_full for details)")
+    ops.add_argument("--prune_except_ids", "--prune-except-ids", metavar="SPEC", type=str, help="(see --help_full for details)")
+    ops.add_argument("--prune_except_devices", "--prune-except-devices", metavar="SPEC", type=str, help="(see --help_full for details)")
+
+    ops.add_argument("--prune_ids", "--prune-ids", metavar="SPEC", type=str, help="(see --help_full for details)")
+    ops.add_argument("--prune_devices", "--prune-devices", metavar="SPEC", type=str, help="(see --help_full for details)")
 
 
     ops_grp.add_argument("--merge_source", "--merge-source", default=None, help="(see --help_full for details)")
