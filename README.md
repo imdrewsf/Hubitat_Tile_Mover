@@ -1,38 +1,96 @@
 ﻿# Hubitat Tile Mover
+
+<!-- TOC -->
+
+- [Overview:](#overview)
+    - [Import, modify and output Hubitat dashboard layouts:](#import-modify-and-output-hubitat-dashboard-layouts)
+    - [Layout Actions](#layout-actions)
+    - [Additional Features](#additional-features)
+- [Layout Import Sources and Output Destinations:](#layout-import-sources-and-output-destinations)
+    - [Import Sources](#import-sources)
+    - [Output destinations](#output-destinations)
+- [Layout Actions Overview:](#layout-actions-overview)
+    - [Layout Action types:](#layout-action-types)
+    - [Action targets:](#action-targets)
+        - [Key concepts:](#key-concepts)
+        - [Selecting Tiles:](#selecting-tiles)
+- [Primary Edit Actions](#primary-edit-actions)
+    - [Insert](#insert)
+    - [Move](#move)
+    - [Copy](#copy)
+    - [Merge](#merge)
+    - [Delete](#delete)
+    - [Clear](#clear)
+    - [Crop](#crop)
+    - [Prune](#prune)
+    - [Trim](#trim)
+- [Supplemental Actions and Options](#supplemental-actions-and-options)
+    - [Sort](#sort)
+    - [Visual Layout Maps](#visual-layout-maps)
+    - [Miscellaneous Options:](#miscellaneous-options)
+    - [Help](#help)
+- [Custom CSS Rules](#custom-css-rules)
+    - [Compatible CSS Rules Types:](#compatible-css-rules-types)
+    - [Incompatible and Problematic CSS Rules Types](#incompatible-and-problematic-css-rules-types)
+    - [Other Problematic CSS Areas](#other-problematic-css-areas)
+- [Examples:](#examples)
+- [Batch Actions:](#batch-actions)
+    - [Tips for running a batched or consecutive actions:](#tips-for-running-a-batched-or-consecutive-actions)
+    - [Example Batch](#example-batch)
+        - [Batch Overview](#batch-overview)
+        - [Example](#example)
+        - [Batched Actions in Detail](#batched-actions-in-detail)
+            - [The First Action (Run)](#the-first-action-run)
+            - [The second action:](#the-second-action)
+            - [The third action:](#the-third-action)
+
+<!-- /TOC -->
+<div style="page-break-after: always"></div>
+
+<a id="markdown-overview" name="overview"></a>
+
 ## Overview:
+
+<a id="markdown-import-modify-and-output-hubitat-dashboard-layouts" name="import-modify-and-output-hubitat-dashboard-layouts"></a>
 
 ### Import, modify and output Hubitat dashboard layouts:
 
 * **Import** dashboard layouts directly from the hub • JSON files • the clipboard (default)
 * **Output** changed layouts directly back to the hub • JSON files • the clipboard (default)
-  
+
+<a id="markdown-layout-actions" name="layout-actions"></a>
 
 ### Layout Actions
 
-* **MOVE** tiles: columns, rows, range
-* **COPY** tiles: columns, rows, range
-* **MERGE** tiles (copy from another dashboard): columns, rows, range
-* **INSERT** full or partial columns, rows (push tiles over/down at column/row)
-* **DELETE** full or partial columns, rows (remove tiles and pull tiles left or up)
-* **CLEAR** tiles (remove but keep layout): columns rows, range
-* **CROP** layout (remove all tiles not in): columns, rows, range
-* **PRUNE** layout (remove all tiles listed or all tiles ***except*** those listed): tile id's, device ids
-* **TRIM** layout (remove blank rows, cols): top, left
+* <b>[MOVE](#move)</b> columns, rows or a rectangular range of tiles
+* <b>[COPY](#copy)</b> columns, rows or a rectangular range of tiles
+* <b>[MERGE](#merge)</b> copy columns, rows or a rectangular range of tiles from another dashboard
+* <b>[INSERT](#insert)</b> full or partial empty columns or rows (push tiles over/down at column/row)
+* <b>[DELETE](#delete)</b> full or partial columns or rows of tiles (remove tiles and shift the layout left or up)
+* <b>[CLEAR](#clear)</b> columns, rows or a rectangular range of tiles but leaves the empty space.
+* <b>[CROP](#crop)</b> a layout by clearing all tiles not in columns, rows or a rectangular range
+* <b>[PRUNE](#prune)</b> a layout by tile or devices id.  Clear only specific id's or clear all ***except*** specific id's
+* <b>[TRIM](#trim)</b> a layout to remove empty top rows and/or left columns.
 
+<a id="markdown-additional-features" name="additional-features"></a>
 
-### Features
+### Additional Features
 
-  * Preserve, duplicate or remove custom CSS rules when tiles added (copied) or removed by actions
-  * Prevent actions which would result in tiles be placed over existing tiles
-  * Visual Layout Maps: Easily see proposed changes, potential conflicts and final outcome of actions
-  
-  ![multimap](https://github.com/user-attachments/assets/547d6dc4-8ab6-4d50-817c-17b7efb767cb)
+* Preserve, duplicate or remove custom CSS rules when tiles added (copied) or removed by actions
+* Prevent actions which would result in tiles be placed over existing tiles
+* Visual Layout Maps: Easily see proposed changes, potential conflicts and final outcome of actions
+
+![multimap](https://github.com/user-attachments/assets/547d6dc4-8ab6-4d50-817c-17b7efb767cb)
 
 ---
 
 <div style="page-break-after: always"></div>
 
+<a id="markdown-layout-import-sources-and-output-destinations" name="layout-import-sources-and-output-destinations"></a>
+
 ## Layout Import Sources and Output Destinations:
+
+<a id="markdown-import-sources" name="import-sources"></a>
 
 ### Import Sources
 
@@ -59,6 +117,8 @@ Exactly one import method is used. If not specified, clipboard is the default.
 
 ---
 
+<a id="markdown-output-destinations" name="output-destinations"></a>
+
 ### Output destinations
 
 - Valid Destinations:
@@ -66,7 +126,7 @@ Exactly one import method is used. If not specified, clipboard is the default.
   - `--output:terminal` — Print output to terminal.
   - `--output:clipboard` — Write to clipboard (default)
   - `--output:file <filename>` — Write to file.
-  - `--output:hub` — POST full layout JSON back to Hubitat using `--url`.
+  - `--output:hub` — POST full layout JSON back to the hub at `--url`.
 
 <br>
 
@@ -78,57 +138,59 @@ Exactly one import method is used. If not specified, clipboard is the default.
 
 - Notes:
   
-  - Output will be set to the clipboard if `--output:<destination>` is not specified or present.
+  - Output default is the clipboard if `--output:<destination>` is not specified or present.
   
   <br>
   
   - `--output:hub` will fail if:
     - Import does not contain the full layout JSON object.
-    - `--url` is not a valid local dashboard url or cannot be reached.
+    - `--url` is not a valid or reachable local dashboard url.
     - A valid requestToken could not be obtained.
 
 ---
 
-### Output format (level)
-
-Allows down-level output (full → minimal → bare). If omitted, output defaults to match input.
-
-- `--output_format:full`
-- `--output_format:minimal`
-- `--output_format:bare`
-
----
-
 <div style="page-break-after: always"></div>
+
+<a id="markdown-layout-actions-overview" name="layout-actions-overview"></a>
 
 ## Layout Actions Overview:
 
-### Action types:
+<a id="markdown-layout-action-types" name="layout-action-types"></a>
 
-1) **Primary edit operation** (at most one per run):
-   insert, move, copy, merge, delete, clear, crop, prune
-2) Supplemental actions (can run alone or after a primary operation):
+### Layout Action types:
 
-- maps: `--show_map`
-- trim: `--trim` / `--trim:top` / `--trim:left`
-- sort: `--sort:<spec>`
-- scrub CSS: `--scrub_css`
+1. **Primary edit actions** — make modifications to tiles.  Primary actions include insert, move, copy, merge, delete, clear, crop and prune.  Only one primary edit action can be per run.
+2. **Supplemental actions** — can be used standalone or with primary actions.  These include displaying visual layout maps, JSON sorting, orphaned CSS cleanup and trim functions.  Supplemental actions are always performed after primary actions.
+3. **Undo /restore action**  — `--undo_last` is a standalone action.  It supersedes all other actions.
 
-`--undo_last` is standalone and supersedes all other actions.
+<a id="markdown-action-targets" name="action-targets"></a>
 
 ### Action targets:
 
-- Tile location is determined upper left corner row and column.
-- Most actions are applied to only to dashboard tiles located within the target columns, rows or range.
-- Tile span is the space a tile occupies calculated as row + height -1, column + width -1.
-- Tiles located outside of the target but whose span extends into it, are considered to be overlapping the target, and are not selected.
-- Use the `--include_overlap` switch to include tiles that overlap the target columns, rows or range.
+<a id="markdown-key-concepts" name="key-concepts"></a>
+
+#### Key concepts:
+
+- A tile's location is determined by by the row and column of its upper left corner.
+- A tile's span is the area it tile occupies, calculated as (row + height -1), (column + width -1).
+- Tiles whose span extends into, but are located (begin) outside of the target area, are considered to be target area "overlaps."
+
+<a id="markdown-selecting-tiles" name="selecting-tiles"></a>
+
+#### Selecting Tiles:
+
+- By default, actions are applied only to tiles that are located (begin) in the target rows, column, or rectangular range.
+- To include tiles that overlap the boundaries of the target area, use the `--include_overlap` switch.
 
 ---
 
 <div style="page-break-after: always"></div>
 
-## Layout Actions
+<a id="markdown-primary-edit-actions" name="primary-edit-actions"></a>
+
+## Primary Edit Actions
+
+<a id="markdown-insert" name="insert"></a>
 
 ### Insert
 
@@ -156,9 +218,9 @@ Inserts empty whole or partial rows or columns by pushing tiles beyond the inser
   
   - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
 
-<br>
-
 ---
+
+<a id="markdown-move" name="move"></a>
 
 ### Move
 
@@ -194,6 +256,8 @@ Moves tiles to a new location.
   - Default behavior: if any conflicts exist, abort before moving anything.
 
 ---
+
+<a id="markdown-copy" name="copy"></a>
 
 ### Copy
 
@@ -233,6 +297,8 @@ Same as Move, but originals remain.  Copies are created with new IDs. Existing t
   - Actions will be aborted if conflicts are found unless `--allow_overlap` or `--skip_overlap` is present.
 
 ---
+
+<a id="markdown-merge" name="merge"></a>
 
 ### Merge
 
@@ -277,6 +343,8 @@ Copy tiles from another dashboard layout into this layout.
 
 ---
 
+<a id="markdown-delete" name="delete"></a>
+
 ### Delete
 
 Deletes tiles located in the target rows or columns, then shifts remaining tiles to close the gap.
@@ -307,6 +375,8 @@ Deletes tiles located in the target rows or columns, then shifts remaining tiles
 
 ---
 
+<a id="markdown-clear" name="clear"></a>
+
 ### Clear
 
 Removes tiles in the target rows, columns or range but does change the dashboard layout.
@@ -334,6 +404,8 @@ Removes tiles in the target rows, columns or range but does change the dashboard
   - Use the `--scrub_css` action to remove orphaned CSS rules for other tiles,
 
 ---
+
+<a id="markdown-crop" name="crop"></a>
 
 ### Crop
 
@@ -366,6 +438,8 @@ Clears tiles outside of the target rows, columns or range.  The position of rema
   - Use `--trim`, `--trim:top` or `--trim:left` to remove blank rows on the top or columns on the left of the remaining tiles.
 
 ---
+
+<a id="markdown-prune" name="prune"></a>
 
 ### Prune
 
@@ -405,6 +479,8 @@ Clears all tiles listed, or all tiles ***except*** those listed in a comma separ
 
 ---
 
+<a id="markdown-trim" name="trim"></a>
+
 ### Trim
 
 Removes blank rows above the top-most tile and/or blank columns left of the left-most tile.
@@ -429,7 +505,13 @@ Removes blank rows above the top-most tile and/or blank columns left of the left
 
 ---
 
+<div style="page-break-after: always"></div>
+
+<a id="markdown-supplemental-actions-and-options" name="supplemental-actions-and-options"></a>
+
 ## Supplemental Actions and Options
+
+<a id="markdown-sort" name="sort"></a>
 
 ### Sort
 
@@ -438,14 +520,19 @@ Changes the order tiles appear in the dashboard layout JSON only
 - Actions:
   
   - `--sort:<spec>`
+
     <br>
+
 - Sort Keys:
   
   - `[-]i` = id
   - `[-]r` = row
   - `[-]c` = col
     <br>
-  - Sort order for keys is ascending unless preceded by a "`-`"
+  - Sort order for keys is ascending unless preceded by a "`-`" 
+
+  <br>
+
 - Notes:
   
   - Sorting only changes the order tiles are listed in the layout JSON.  It has no effect on the order tiles appear on the dashboard.
@@ -456,6 +543,8 @@ Changes the order tiles appear in the dashboard layout JSON only
   - No sorting is applied to CSS rules in customCSS.
 
 ---
+
+<a id="markdown-visual-layout-maps" name="visual-layout-maps"></a>
 
 ### Visual Layout Maps
 
@@ -482,6 +571,8 @@ Show before, outcome and conflict layout previews in the terminal
 
 ---
 
+<a id="markdown-miscellaneous-options" name="miscellaneous-options"></a>
+
 ### Miscellaneous Options:
 
 - Prompts / Confirmation Options:
@@ -493,8 +584,17 @@ Show before, outcome and conflict layout previews in the terminal
 - Safety / Undo Options:
   
   - `--lock_backup` — Retains the last undo backup (if found) as the undo backup for the current action.
-  - `--undo_last` — Load the undo backup (if found) and writes it to the previous actions output destination.
-    
+  - `--undo_last` — Load the undo backup (if found) and writes it to the previous actions output destination.  `--undo_last` may be used with `--output:<type>` to override where the undo will be restored to.  However, the restore destination type match the specified output type.  For example, if the last output was a file, a new filename can be specified but the new output type be file.  
+
+  - Backup files contain the JSON imported before an action is performed.  The backup file is not created however, until after the action completes and the result has been successfully saved to the output destination.
+  - When restoring directly to the hub, there are additional safeguards in place to prevent:
+    - Restoring and overwriting a different dashboard than the dashboard layout in the undo_file (a different `--output:hub --url <local dashboard url>` is specified with the `--undo_last` action.)
+    - Restoring an older backup than intended. (Undo is older than 5 minutes)
+    - Edits made to a dashboard after the backup was created (The current dashboard layout stored on the hub does not match the layout that was uploaded last)
+  - A confirmation prompt will be presented if any of the safeguards are triggered.  Use `--force` to suppress prompts.
+
+     
+
     <br>
 - Output / Debug Information Options:
   
@@ -503,20 +603,143 @@ Show before, outcome and conflict layout previews in the terminal
   - `--debug` — per-tile action logs + deep details
     
     <br>
-- Notes:
+- :
   
-  - The undo backup contains the JSON imported for an action.  It is only created after an action has completed and was successfully saved to the output destination.
+  - The undo backup file is only created after an action has completed and was successfully saved to the output destination.
   - The purpose of `--confirm_keep` is to provide an opportunity to review or test the outcome of an action, then if necessary, undo it.  This is useful when tweaking action target ranges or options.  It is the same as running an action without `--confirm_keep`, then using the `--undo_last` action.
     
     <br>
+
+<a id="markdown-help" name="help"></a>
 
 ### Help
 
 - `-h`, `--help` — Short help
 - `--help_full` — Full detailed help
 
+<div style="page-break-after: always"></div>
+
+<a id="markdown-custom-css-rules" name="custom-css-rules"></a>
+
+## Custom CSS Rules
+
+CSS Rule Management Capabilities and limitations
+
+The tool provides basic functionality to manage CSS rules that apply to tiles as they are copied, merged, or removed.  While there is some logic to handle different ways a rules might reference a tile or be formatted, it is limited to simple single and multi-selector rules.  Custom dashboard CSS with complex CSS rules contain tile references ("tile-##") may lead to unpredictable outcomes.  When working with a dashboard with incompatible custom CSS, use the `--ignore_css` option to disable CSS rule processing and avoid using the `--cleanup_css` option or the `--scrub_css` action.
+
+<a id="markdown-compatible-css-rules-types" name="compatible-css-rules-types"></a>
+
+### Compatible CSS Rules Types:
+
+- Simple, single-selector rules:
+  
+  `#tile-40 { ... }`
+  `#tile-20 { ... }`
+
+<br>
+
+- Simple, multi-selector rules:
+  
+  `#tile-40, #tile-20, #tile-60 { ... }`
+
+<br>
+
+- Simple, single and multi-selector rules inside @media blocks:
+  
+  `@media (max-width: 600px) { #tile-80 { display: none !important; }`
+
+<br>
+
+<a id="markdown-incompatible-and-problematic-css-rules-types" name="incompatible-and-problematic-css-rules-types"></a>
+
+### Incompatible and Problematic CSS Rules Types
+
+- Multi / Compound Class Selectors:
+  
+  `.tile-80.tile-40 { ... }`
+
+<br>
+
+- Child Combinators
+  
+  `#tile-80 > .tile-60 { ... }`
+
+<br>
+
+- Descendent Rules:
+  
+  `tile-80 #tile-40 .icon { ... }`
+
+<a id="markdown-other-problematic-css-areas" name="other-problematic-css-areas"></a>
+
+### Other Problematic CSS Areas
+
+1. Tile id's in `content:` or other string values
+
+`.some-class::after {content: "`<span style="color: red"><b>tile-123</b></span>"`}`
+
+<br>
+
+2. Tile id's embedded in urls.
+
+`.tile .tile-content { background-image: url("/local/tile-images/`<span style="color: red"><b>tile-123.png"</b></span>`);}`
+
+<br>
+
+3. CSS variables keyed by id
+
+`:root {`<span style="color: red"><b>--tile-123</b></span>`-accent: #ffcc00 }`
+
+<br>
+
+Copying "tile-123" and creating "tile-141" could result in conflicting rules.  For example:
+
+`.some-class::after {content: "`<span style="color: red"><b>tile-123</b></span>"`}`
+`.some-class::after {content: "`<span style="color: red"><b>tile-141</b></span>"`}`
+
+or
+
+`:root {`<span style="color: red"><b>--tile-123</b></span>`-accent: #ffcc00 }`
+`:root {`<span style="color: red"><b>--tile-141</b></span>`-accent: #ffcc00 }`
+
+<br>
+
+4. CSS Comments
+
+Avoid using comments with "tile-xx" references.  While tile references within comments are unlikely to create rule conflicts, they may trigger orphan warnings or interfere with id number assignments when copying or merging.  Depending on where comments are located, they may or may not be duplicated or removed with the tile they reference.
+
+- Comments within rule bodies:
+  
+  `#tile-123 {`
+  `  /* styles for tile-123 */`
+  `  font-size: 20px;`
+  `}`<br>
+  
+  When rules are duplicated, only the selector is changed to reflect the new tile's assigned id.  In this example, the comment in the rule body copied from "tile-123" to "tile-141", remains unchanged.
+  
+  `#tile-141 {`
+  `  /* styles for tile-123 */`
+  `  font-size: 20px;`
+  `}`<br>
+  
+  The comment might be technically correct, as "tile-141" is simply a copy of "tile-123".  However, if "tile-123" were deleted, a reference to "tile-123" would remain in the comment for "tile-141".  Depending on how the comment appeared in the CSS, This would cause unresolvable orphaned CSS warnings and could also interfere with new ID assignment for later copy or merge operations.
+
+<br>
+
+- Comments that outside of rule blocks such as standalone statements or as selector "preludes":
+  
+  `/* styles for tile-123 */`
+  `#tile-123 { font-size: 20px; }`<br>
+  or<br>
+  `#tile-141 { font-size: 20px; }  /* comment not duplicated */`
+  
+  The comment will not be copied or removed with the rule for "tile-123"  If "tile-123" were removed, the rule would be removed but the comment would remain.
+
+<br>
 
 <div style="page-break-after: always"></div>
+
+<a id="markdown-examples" name="examples"></a>
 
 ## Examples:
 
@@ -525,44 +748,41 @@ Show before, outcome and conflict layout previews in the terminal
   ```bash
   python hubitat_tile_mover.py --insert_cols 2 15 --row_range 4 32
   ```
-  
 * Move columns 1–14 to start at 85 and save back to hub.  Show the layout before and after maps:
   
   ```bash
   python hubitat_tile_mover.py --import:hub --url "<dashboard_local_url>" --move_cols 1 14 85 --output:hub --show_map
   ```
-
 * Copy tiles in the rectangular range 1,1 to 2,20 to a new location at 40,40:
   
   ```bash
   python hubitat_tile_mover.py --copy_range 1 1 20 20 40 40
   ```
-
 * Crop to a range (delete everything outside), show maps, force, cleanup CSS, save to a file:
   
   ```bash
   python hubitat_tile_mover.py --crop_to_range 1 1 85 85 --show_map --force --cleanup_css --output:file "<filename.json>"
   ```
-
 * Remove orphan CSS rules only (no tile edits) without confirmation prompt:
   
   ```bash
   python hubitat_tile_mover.py --scrub_css --force
   ```
-  
-
 * Undo last run (restore last input to last outputs unless overridden):
   
   ```bash
   python hubitat_tile_mover.py --undo_last
   ```
 
-
 ---
 
 <div style="page-break-after: always"></div>
 
+<a id="markdown-batch-actions" name="batch-actions"></a>
+
 ## Batch Actions:
+
+<a id="markdown-tips-for-running-a-batched-or-consecutive-actions" name="tips-for-running-a-batched-or-consecutive-actions"></a>
 
 ### Tips for running a batched or consecutive actions:
 
@@ -571,7 +791,11 @@ Show before, outcome and conflict layout previews in the terminal
 
 <br>
 
+<a id="markdown-example-batch" name="example-batch"></a>
+
 ### Example Batch
+
+<a id="markdown-batch-overview" name="batch-overview"></a>
 
 #### Batch Overview
 
@@ -580,6 +804,8 @@ Show before, outcome and conflict layout previews in the terminal
 - Crop the resulting layout keep only tiles in the rectangular region 10,10 - 40,30
 - Trim empty rows left behind at the top and left sides
 - Cleanup orphaned CSS rules and output the final layout back to the hub.
+
+<a id="markdown-example" name="example"></a>
 
 #### Example
 
@@ -593,7 +819,11 @@ python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --
 
 <br>
 
+<a id="markdown-batched-actions-in-detail" name="batched-actions-in-detail"></a>
+
 #### Batched Actions in Detail
+
+<a id="markdown-the-first-action-run" name="the-first-action-run"></a>
 
 ##### The First Action (Run)
 
@@ -604,6 +834,8 @@ python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --
    
    <br>
 
+<a id="markdown-the-second-action" name="the-second-action"></a>
+
 ##### The second action:
 
 1. Imports the layout saved by the first action from the clipboard.
@@ -612,6 +844,8 @@ python hubitat_tile_mover.py --import:clipboard --url "<dashboard_local_url>" --
 4. Does not change the undo backup created by the first action.  In the event of an error, running `undo_last` would not be necessary to undo any actions performed by the batch as they have only been saved to the clipboard.  The original layout still exists unchanged on the hub.
 
 <br>
+
+<a id="markdown-the-third-action" name="the-third-action"></a>
 
 ##### The third action:
 

@@ -5,6 +5,38 @@ import sys
 from typing import List
 
 
+def layout_fingerprint(obj: object) -> str:
+    """Return a stable fingerprint for the layout content (tiles + custom CSS).
+
+    Used to detect whether a dashboard layout has changed since the last run.
+    """
+    import hashlib
+    import json
+
+    from .css_ops import get_custom_css
+    from .jsonio import extract_tiles_container, normalize_tiles_list
+
+    _kind, _container, tiles_any = extract_tiles_container(obj, verbose=False, debug=False)
+    tiles = normalize_tiles_list(tiles_any, verbose=False, debug=False)
+
+    def _tile_key(t: dict):
+        tid = t.get("id")
+        try:
+            return (0, int(tid))
+        except Exception:
+            return (1, str(tid))
+
+    tiles_sorted = sorted([t for t in tiles if isinstance(t, dict)], key=_tile_key)
+    _css_key, css = get_custom_css(obj)
+
+    fp_obj = {
+        "tiles": tiles_sorted,
+        "customCSS": css or "",
+    }
+    blob = json.dumps(fp_obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
 def _use_color() -> bool:
     """Enable ANSI color on stderr when attached to a TTY (unless NO_COLOR set)."""
     if os.environ.get("NO_COLOR") is not None:
@@ -80,11 +112,13 @@ def prompt_yes_no_or_die(
     if force:
         return
     if not sys.stdin.isatty():
-        die(f"This operation will remove {what}. Re-run with --force to proceed (no TTY available for prompt).")
+        die(f"This operation affects {what}. Re-run with --force to proceed (no TTY available for prompt).")
+    if show_details and details:
+        print(details.rstrip() + "\n", file=sys.stderr, flush=True)
     try:
         ans = input(f"{prompt} [y/N]: ").strip().lower()
     except EOFError:
-        die(f"This operation will remove {what}. Re-run with --force to proceed (no input available).")
+        die(f"This operation affects {what}. Re-run with --force to proceed (no input available).")
     if ans not in ("y", "yes"):
         raise SystemExit(1)
 

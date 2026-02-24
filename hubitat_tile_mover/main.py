@@ -52,7 +52,12 @@ from .css_ops import (
     set_custom_css,
     tile_ids_in_css,
 )
-from .util import die, vlog, ok, wlog, prompt_yes_no
+from .util import die, vlog, ok, wlog, prompt_yes_no, prompt_yes_no_or_die, layout_fingerprint
+
+
+# If a significant amount of time has passed since the last run, require confirmation
+# before --undo_last overwrites a dashboard layout.
+UNDO_STALE_SECONDS = 60 * 60  # 1 hour
 
 
 def _parse_inclusive_range(name: str, pair: Optional[List[int]]) -> Optional[Tuple[int, int]]:
@@ -503,10 +508,84 @@ def main(argv: Optional[List[str]] = None) -> None:
         if not out_text.endswith("\n"):
             out_text += "\n"
         non_hub = [(k, p) for (k, p) in outputs if k != "hub"]
+
+        # Safety confirmation: if the dashboard has likely changed since the last run (or if the
+        # backup is "stale"), require explicit confirmation before overwriting via --undo_last.
+        hub_ctx_current = None
+        if using_hub_output:
+            import time as _time
+            import datetime as _dt
+
+            last_url = st.get("last_url")
+            last_saved_hash = st.get("last_hub_saved_hash")
+            st_epoch = st.get("state_written_at_epoch")
+            if st_epoch is None:
+                try:
+                    st_epoch = int(os.path.getmtime(st_path))
+                except Exception:
+                    st_epoch = None
+            now_epoch = int(_time.time())
+            age_sec = (now_epoch - int(st_epoch)) if st_epoch is not None else None
+
+            # Always fetch current hub layout once (needed for POST token/layout_url too).
+            hub_ctx_current, cur_obj = hub_import_layout(url, verbose=args.verbose, debug=args.debug)
+            cur_hash = layout_fingerprint(cur_obj)
+
+            needs_prompt = False
+            reason = None
+
+            # If the user is undoing onto a different dashboard URL than last run, always confirm.
+            if last_url and url and (last_url != url):
+                needs_prompt = True
+                reason = f"target URL differs from last run ({last_url})"
+            else:
+                # If we have a saved fingerprint from the last hub save, confirm when the hub no longer matches.
+                if last_saved_hash and last_url and url and (last_url == url) and (cur_hash != last_saved_hash):
+                    needs_prompt = True
+                    reason = "dashboard layout has changed since your last run"
+                # If enough time has passed since the last run, confirm even if the hash matches.
+                elif age_sec is not None and age_sec >= UNDO_STALE_SECONDS:
+                    needs_prompt = True
+                    reason = f"last run was {int(age_sec // 60)} minute(s) ago"
+                # If we can't determine age/hash context, be conservative.
+                elif (last_saved_hash is None) and (age_sec is None):
+                    needs_prompt = True
+                    reason = "cannot determine when the backup was created"
+
+            if needs_prompt:
+                when_s = st.get("state_written_at")
+                if not when_s and st_epoch is not None:
+                    try:
+                        when_s = _dt.datetime.fromtimestamp(int(st_epoch)).isoformat(sep=" ", timespec="seconds")
+                    except Exception:
+                        when_s = None
+                age_s = "unknown"
+                if age_sec is not None:
+                    mins = int(age_sec // 60)
+                    hrs = int(mins // 60)
+                    if hrs:
+                        age_s = f"{hrs}h {mins % 60}m"
+                    else:
+                        age_s = f"{mins}m"
+
+                details = (
+                    f"Undo will overwrite the dashboard layout at:\n  {url}\n"
+                    f"Backup created: {when_s or 'unknown'} (age {age_s}).\n"
+                    f"Reason: {reason}.\n"
+                )
+                prompt_yes_no_or_die(
+                    args.force,
+                    "Proceed with overwrite?",
+                    what="the dashboard layout",
+                    details=details,
+                    show_details=True,
+                )
+
+        # Proceed with the undo outputs.
         write_outputs(non_hub, args.newline, out_text)
         if using_hub_output:
-            hub_ctx, _tmp = hub_import_layout(url, verbose=args.verbose, debug=args.debug)
-            hub_post_layout_with_refresh(url, hub_ctx.layout_url, out_obj, verbose=args.verbose, debug=args.debug)
+            assert hub_ctx_current is not None
+            hub_post_layout_with_refresh(url, hub_ctx_current.layout_url, out_obj, verbose=args.verbose, debug=args.debug)
 
         dests = ", ".join([(k if k != "file" else f"file:{p}") for (k, p) in outputs])
         from .util import ok as _ok
@@ -1332,10 +1411,14 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Commit backup (atomic) and persist last-run state for --undo_last defaults.
     try:
+        import time as _time
+        import datetime as _dt
+
         # If we created a new backup this run, commit it only after all outputs (and hub POST) succeeded.
         if backup_tmp_path and backup_path and (not (args.lock_backup and os.path.exists(backup_path))):
             os.replace(backup_tmp_path, backup_path)
-        _write_state({
+        now_epoch = int(_time.time())
+        state = {
             # Global last-run backup (works for file/clipboard/hub imports)
             "backup_obj": original_obj,
             # Optional per-dashboard backup path (only meaningful when args.url is provided)
@@ -1343,7 +1426,22 @@ def main(argv: Optional[List[str]] = None) -> None:
             "last_outputs": outputs,
             "last_url": args.url,
             "last_output_format": args.output_format,
-        })
+            "last_import_kind": import_kind,
+            "state_written_at_epoch": now_epoch,
+            "state_written_at": _dt.datetime.fromtimestamp(now_epoch).isoformat(sep=" ", timespec="seconds"),
+        }
+
+        if posted and args.url:
+            # Fingerprint the last layout saved to hub so --undo_last can detect external changes.
+            try:
+                state["last_hub_saved_hash"] = layout_fingerprint(output_obj)
+                state["last_hub_saved_at_epoch"] = now_epoch
+            except Exception:
+                state["last_hub_saved_hash"] = None
+        else:
+            state["last_hub_saved_hash"] = None
+
+        _write_state(state)
     except Exception:
         pass
 
