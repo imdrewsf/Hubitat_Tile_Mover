@@ -29,11 +29,11 @@
     - [Visual Layout Maps](#visual-layout-maps)
     - [Miscellaneous Options:](#miscellaneous-options)
     - [Help](#help)
-- [Custom CSS Rules](#custom-css-rules)
+- [Custom CSS Handling - Capabilities and Limitations](#custom-css-handling---capabilities-and-limitations)
     - [Compatible CSS Rules Types:](#compatible-css-rules-types)
-    - [Incompatible and Problematic CSS Rules Types](#incompatible-and-problematic-css-rules-types)
-    - [Other Problematic CSS Areas](#other-problematic-css-areas)
-- [Examples:](#examples)
+    - [Incompatible and Problematic CSS Selector Types](#incompatible-and-problematic-css-selector-types)
+    - [Incompatible and Problematic CSS Rules Bodies](#incompatible-and-problematic-css-rules-bodies)
+- [Usage Examples:](#usage-examples)
 - [Batch Actions:](#batch-actions)
     - [Tips for running a batched or consecutive actions:](#tips-for-running-a-batched-or-consecutive-actions)
     - [Example Batch](#example-batch)
@@ -619,129 +619,138 @@ Show before, outcome and conflict layout previews in the terminal
 
 <div style="page-break-after: always"></div>
 
-<a id="markdown-custom-css-rules" name="custom-css-rules"></a>
+<a id="markdown-custom-css-handling---capabilities-and-limitations" name="custom-css-handling---capabilities-and-limitations"></a>
 
-## Custom CSS Rules
+## Custom CSS Handling - Capabilities and Limitations
 
-CSS Rule Management Capabilities and limitations
+- New ids are generated for each new tile created when copying or merging. Custom CSS is then searched for references to the original tile's id such as #tile-<original id> or .tile-<original id>.  Matches are analyzed to determine if the reference a selector or part of a rule.  However, references to objects can come in many different forms and CSS can be formatted a lot of different ways.  While there is some logic to parse matches and extract rules correctly, it is limited to simple, single and multi-selector rules.  Compound selectors, complex rules or comments that contain "tile-##" may lead to a number of issues:
 
-The tool provides basic functionality to manage CSS rules that apply to tiles as they are copied, merged, or removed.  While there is some logic to handle different ways a rules might reference a tile or be formatted, it is limited to simple single and multi-selector rules.  Custom dashboard CSS with complex CSS rules contain tile references ("tile-##") may lead to unpredictable outcomes.  When working with a dashboard with incompatible custom CSS, use the `--ignore_css` option to disable CSS rule processing and avoid using the `--cleanup_css` option or the `--scrub_css` action.
+
+  - Conflicting or overlapping rules
+  - Orphaned rules
+  - Rules with references to orphaned tiles
+  - Comment blocks with references to orphaned tiles
+  - Unresolvable orphaned rule warnings
+  - Inconsistent tile ID generation 
+
+- CSS rule processing can be disabled when working with a dashboard with incompatible custom CSS by using the `--ignore_css` option  with most layout actions.  Additionally, avoid using the `--cleanup_css` option and the `--scrub_css` actions.  Tiles will be created without any CSS rules and no rules will be removed when tiles are deleted or cleared.
+
 
 <a id="markdown-compatible-css-rules-types" name="compatible-css-rules-types"></a>
 
 ### Compatible CSS Rules Types:
 
-- Simple, single-selector rules:
+- ✅ Simple, single-selector rules:
   
   `#tile-40 { ... }`
   `#tile-20 { ... }`
 
 <br>
 
-- Simple, multi-selector rules:
+- ✅ Simple, multi-selector rules:
   
   `#tile-40, #tile-20, #tile-60 { ... }`
 
 <br>
 
-- Simple, single and multi-selector rules inside @media blocks:
+- ✅ Simple, single and multi-selector rules inside @media blocks:
   
   `@media (max-width: 600px) { #tile-80 { display: none !important; }`
 
 <br>
 
-<a id="markdown-incompatible-and-problematic-css-rules-types" name="incompatible-and-problematic-css-rules-types"></a>
+<a id="markdown-incompatible-and-problematic-css-selector-types" name="incompatible-and-problematic-css-selector-types"></a>
 
-### Incompatible and Problematic CSS Rules Types
+### Incompatible and Problematic CSS Selector Types
 
-- Multi / Compound Class Selectors:
+- ❌ Multi / Compound Class Selectors:
   
   `.tile-80.tile-40 { ... }`
 
 <br>
 
-- Child Combinators
+- ❌ Child Combinators
   
   `#tile-80 > .tile-60 { ... }`
 
 <br>
 
-- Descendent Rules:
+- ❌ Descendent Rules:
   
   `tile-80 #tile-40 .icon { ... }`
 
-<a id="markdown-other-problematic-css-areas" name="other-problematic-css-areas"></a>
+<a id="markdown-incompatible-and-problematic-css-rules-bodies" name="incompatible-and-problematic-css-rules-bodies"></a>
 
-### Other Problematic CSS Areas
+### Incompatible and Problematic CSS Rules Bodies
 
-1. Tile id's in `content:` or other string values
+- ❌ Tile id's in `content:` or other string values
 
-`.some-class::after {content: "`<span style="color: red"><b>tile-123</b></span>"`}`
+  `.some-class::after {content: "`<span style="color: red"><b>tile-123</b></span>"`}`
 
-<br>
+  <br>
 
-2. Tile id's embedded in urls.
+- ❌ Tile id's embedded in urls.
 
-`.tile .tile-content { background-image: url("/local/tile-images/`<span style="color: red"><b>tile-123.png"</b></span>`);}`
+  `.tile .tile-content { background-image: url("/local/tile-images/`<span style="color: red"><b>tile-123</b></span>.png"`);}`
 
-<br>
+  <br>
 
-3. CSS variables keyed by id
+- ❌ CSS variables keyed by id
 
-`:root {`<span style="color: red"><b>--tile-123</b></span>`-accent: #ffcc00 }`
+  `:root {`<span style="color: red"><b>--tile-123</b></span>`-accent: #ffcc00 }`
 
-<br>
+  <br>
 
-Copying "tile-123" and creating "tile-141" could result in conflicting rules.  For example:
+    Copying "tile-123" and creating "tile-141" could result in conflicting rules.  For example:
 
-`.some-class::after {content: "`<span style="color: red"><b>tile-123</b></span>"`}`
-`.some-class::after {content: "`<span style="color: red"><b>tile-141</b></span>"`}`
+  `.some-class::after {content: "`<span style="color: red"><b>tile-123</b></span>"`}`
+  `.some-class::after {content: "`<span style="color: red"><b>tile-141</b></span>"`}`
 
-or
+  or
 
-`:root {`<span style="color: red"><b>--tile-123</b></span>`-accent: #ffcc00 }`
-`:root {`<span style="color: red"><b>--tile-141</b></span>`-accent: #ffcc00 }`
+  `:root {`<span style="color: red"><b>--tile-123</b></span>`-accent: #ffcc00 }`
+  `:root {`<span style="color: red"><b>--tile-141</b></span>`-accent: #ffcc00 }`
 
-<br>
+  <br>
 
-4. CSS Comments
+- ❌ CSS Comments
 
-Avoid using comments with "tile-xx" references.  While tile references within comments are unlikely to create rule conflicts, they may trigger orphan warnings or interfere with id number assignments when copying or merging.  Depending on where comments are located, they may or may not be duplicated or removed with the tile they reference.
+  Avoid using comments with "tile-xx" references.  While tile references within comments are unlikely to create rule conflicts, they may trigger orphan warnings or interfere with id number assignments when copying or merging.  Depending on where comments are located, they may or may not be duplicated or removed with the tile they reference.
 
-- Comments within rule bodies:
-  
-  `#tile-123 {`
-  `  /* styles for tile-123 */`
-  `  font-size: 20px;`
-  `}`<br>
-  
-  When rules are duplicated, only the selector is changed to reflect the new tile's assigned id.  In this example, the comment in the rule body copied from "tile-123" to "tile-141", remains unchanged.
-  
-  `#tile-141 {`
-  `  /* styles for tile-123 */`
-  `  font-size: 20px;`
-  `}`<br>
-  
-  The comment might be technically correct, as "tile-141" is simply a copy of "tile-123".  However, if "tile-123" were deleted, a reference to "tile-123" would remain in the comment for "tile-141".  Depending on how the comment appeared in the CSS, This would cause unresolvable orphaned CSS warnings and could also interfere with new ID assignment for later copy or merge operations.
+  - Comments within rule bodies:
+    
+    `#tile-123 {`
+    `  /* styles for tile-123 */`
+    `  font-size: 20px;`
+    `}`<br>
+    
+    When rules are duplicated, only the selector is changed to reflect the new tile's assigned id.  In this example, the comment in the rule body copied from "tile-123" to "tile-141", remains unchanged.
+    
+    `#tile-141 {`
+    `  /* styles for tile-123 */`
+    `  font-size: 20px;`
+    `}`<br>
+    
+    The comment might be technically correct, as "tile-141" is simply a copy of "tile-123".  However, if "tile-123" were deleted, a reference to "tile-123" would remain in the comment for "tile-141".  Depending on how the comment appeared in the CSS, This would cause unresolvable orphaned CSS warnings and could also interfere with new ID assignment for later copy or merge operations.
 
-<br>
+  <br>
 
-- Comments that outside of rule blocks such as standalone statements or as selector "preludes":
-  
-  `/* styles for tile-123 */`
-  `#tile-123 { font-size: 20px; }`<br>
-  or<br>
-  `#tile-141 { font-size: 20px; }  /* comment not duplicated */`
-  
-  The comment will not be copied or removed with the rule for "tile-123"  If "tile-123" were removed, the rule would be removed but the comment would remain.
+  - Comments that outside of rule blocks such as standalone statements or as selector "preludes":
+    
+    `/* styles for tile-123 */`
+    `#tile-123 { font-size: 20px; }`<br>
+    or<br>
+    `#tile-141 { font-size: 20px; }  /* comment not duplicated */`
+    
+    The comment will not be copied or removed with the rule for "tile-123"  If "tile-123" were removed, the rule would be removed but the comment would remain.
 
-<br>
+  <br>
 
 <div style="page-break-after: always"></div>
  
-<a id="markdown-examples" name="examples"></a>
+<a id="markdown-usage-examples" name="usage-examples"></a>
 
-## Examples:
+## Usage Examples:
 
 * Insert 2 columns at col 15 (only in rows 4–32):
   
