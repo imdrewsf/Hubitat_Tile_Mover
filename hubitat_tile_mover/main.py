@@ -46,10 +46,17 @@ from .selectors import (
 from .tiles import verify_tiles_minimum, as_int, tile_row_extent, tile_col_extent, rect as tile_rect
 from .css_ops import (
     cleanup_css_for_tile_ids,
+    collect_selector_item_bodies,
+    drop_selector_items_by_keys,
+    filter_css_fragment_duplicates,
     generate_css_for_id_map,
     get_custom_css,
+    normalize_css_body,
     orphan_tile_ids_in_css,
+    process_standalone_comments_for_css_cleared_tiles,
+    remove_selector_items_by_keys,
     set_custom_css,
+    tile_has_selector_rules,
     tile_ids_in_css,
 )
 from .util import die, vlog, ok, wlog, prompt_yes_no, prompt_yes_no_or_die, layout_fingerprint
@@ -305,6 +312,26 @@ def _compute_before_map_mark_rects(
                     pass
         add(removed)
 
+    # CSS-only actions: mark the involved tile(s).
+    copy_pair = None
+    for _k in (
+        "copy_tile_css_merge",
+        "copy_tile_css_overwrite",
+        "copy_tile_css_replace",
+        "copy_tile_css_add",
+    ):
+        v = getattr(args, _k, None)
+        if v:
+            copy_pair = v
+            break
+    if copy_pair:
+        from_id, to_id = copy_pair
+        add([t for t in tiles if as_int(t, "id") in {int(from_id), int(to_id)}])
+
+    if getattr(args, "clear_tile_css", None) is not None:
+        tid = int(getattr(args, "clear_tile_css"))
+        add([t for t in tiles if as_int(t, "id") == tid])
+
     return [tile_rect(t) for t in marked_tiles]
 
 def _parse_trim_modes(trim_value: Optional[str], legacy_left: bool, legacy_top: bool) -> Tuple[bool, bool]:
@@ -428,6 +455,13 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     argv = normalize_argv(argv)
 
+    # If invoked with no switches/args, show short help instead of attempting to parse input.
+    if not argv:
+        p = build_parser()
+        p.print_help()
+        return
+
+
     # Guard singletons (track legacy tokens too)
     assert_singleton_flags(argv, ["--import"])
     assert_singleton_flags(argv, ["--output_format", "--output-format", "--output_shape", "--output-shape"])
@@ -453,6 +487,11 @@ def main(argv: Optional[List[str]] = None) -> None:
             args.delete_rows, args.delete_cols, args.clear_rows, args.clear_cols, args.clear_range,
             args.crop_to_rows, args.crop_to_cols, args.crop_to_range,
             args.prune_except_ids, args.prune_except_devices, args.prune_ids, args.prune_devices,
+            getattr(args, 'copy_tile_css_merge', None),
+            getattr(args, 'copy_tile_css_overwrite', None),
+            getattr(args, 'copy_tile_css_replace', None),
+            getattr(args, 'copy_tile_css_add', None),
+            args.clear_tile_css,
             args.copy_cols, args.copy_rows, args.copy_range,
             args.merge_cols, args.merge_rows, args.merge_range,
             args.trim, args.sort, args.scrub_css,
@@ -652,16 +691,21 @@ def main(argv: Optional[List[str]] = None) -> None:
         or args.prune_except_devices
         or args.prune_ids
         or args.prune_devices
+        or getattr(args, 'copy_tile_css_merge', None)
+        or getattr(args, 'copy_tile_css_overwrite', None)
+        or getattr(args, 'copy_tile_css_replace', None)
+        or getattr(args, 'copy_tile_css_add', None)
+        or args.clear_tile_css
     )
 
     has_sort = bool((args.sort is not None) or (getattr(args, "order", None) is not None))
     # Standalone map view mode: --show_map with no other actions.
     # This mode should only render the imported layout map and still check for orphan CSS.
-    view_only = bool(getattr(args, "show_map", False)) and not (has_movement or has_trim or args.scrub_css or has_sort)
+    view_only = bool(getattr(args, "show_map", False)) and not (has_movement or has_trim or args.scrub_css or args.compact_css or has_sort)
 
-    if not (has_movement or has_trim or args.scrub_css or has_sort or view_only):
+    if not (has_movement or has_trim or args.scrub_css or args.compact_css or has_sort or view_only):
         die(
-            "No operation specified. Use one movement/edit option and/or trim and/or --sort and/or --scrub_css, or use --show_map to view the imported layout. Use -h for help."
+            "No operation specified. Use one movement/edit option and/or trim and/or --sort and/or --scrub_css and/or --compact_css, or use --show_map to view the imported layout. Use -h for help."
         )
 
     # Validate range filters usage
@@ -678,6 +722,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     ):
         die("--allow_overlap/--skip_overlap are only valid with --move_*, --copy_*, or --merge_* commands.")
     # --force is allowed for any action that would otherwise prompt for confirmation.
+
+    # Copy-tile-css modes are expressed as action switches (mutually exclusive).
 
     # Validate merge usage
     if (args.merge_cols or args.merge_rows or args.merge_range):
@@ -742,6 +788,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     has_tiles = bool(tiles_any)
     merge_like = bool(args.merge_source or args.merge_url) and bool(args.merge_cols or args.merge_rows or args.merge_range)
     scrub_like = bool(args.scrub_css)
+    compact_like = bool(args.compact_css)
+
     def _ga(name):
         return getattr(args, name, None)
     show_map_only = bool(_ga('show_map')) and not any([
@@ -754,7 +802,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         _ga('clear_rows'), _ga('clear_cols'), _ga('clear_range'),
         _ga('crop_to_rows'), _ga('crop_to_cols'), _ga('crop_to_range'),
         _ga('prune_except_ids'), _ga('prune_except_devices'), _ga('prune_ids'), _ga('prune_devices'),
+        _ga('copy_tile_css_merge'), _ga('copy_tile_css_overwrite'), _ga('copy_tile_css_replace'), _ga('copy_tile_css_add'),
+        _ga('clear_tile_css'),
         _ga('scrub_css'),
+        _ga('compact_css'),
+
     ])
     if has_tiles or (not (merge_like or scrub_like or show_map_only)):
         verify_tiles_minimum(tiles_any)
@@ -1188,8 +1240,167 @@ def main(argv: Optional[List[str]] = None) -> None:
     # Post-op CSS handling
     css_key, css_text = get_custom_css(obj)
 
+    # CSS-only actions: copy tile CSS in one of the explicit modes.
+    copy_mode = None
+    copy_pair = None
+    for _attr, _mode in (
+        ("copy_tile_css_merge", "merge"),
+        ("copy_tile_css_overwrite", "overwrite"),
+        ("copy_tile_css_replace", "replace"),
+        ("copy_tile_css_add", "add"),
+    ):
+        v = getattr(args, _attr, None)
+        if v:
+            copy_mode = _mode
+            copy_pair = v
+            break
+
+    if copy_mode and copy_pair:
+        from .util import ilog
+
+        from_id, to_id = copy_pair
+        from_id = int(from_id)
+        to_id = int(to_id)
+        if from_id == to_id:
+            die(f"--copy_tile_css:{copy_mode} requires different FROM_TILE and TO_TILE ids.")
+
+        if css_key is None:
+            die(f"--copy_tile_css:{copy_mode} requires a JSON object input that can contain customCSS (full/minimal).")
+
+        existing_ids = {as_int(t, 'id') for t in tiles if t.get('id') is not None}
+        if from_id not in existing_ids:
+            die(f"--copy_tile_css:{copy_mode}: source tile id {from_id} not found in layout.")
+        if to_id not in existing_ids:
+            die(f"--copy_tile_css:{copy_mode}: destination tile id {to_id} not found in layout.")
+
+        css_text = css_text or ""
+
+        # Generate CSS fragment by duplicating FROM selectors to TO.
+        # This uses the same selector+body rewriting logic as tile copy/merge.
+        frag = generate_css_for_id_map(css_text, {from_id: to_id}, dest_css=None)
+        if not frag.strip():
+            if not args.quiet:
+                wlog(f"--copy_tile_css:{copy_mode}: no tile-specific CSS rules found for tile-{from_id}; no changes.")
+        else:
+            if copy_mode == 'replace':
+                css_text2 = cleanup_css_for_tile_ids(css_text, [to_id])
+                css_text2 = css_text2.rstrip() + "\n\n" + frag.strip() + "\n"
+                css_text = css_text2
+                set_custom_css(obj, css_key, css_text)
+
+            elif copy_mode == 'add':
+                # Add everything regardless of conflicts.
+                css_text2 = css_text.rstrip() + "\n\n" + frag.strip() + "\n"
+                css_text = css_text2
+                set_custom_css(obj, css_key, css_text)
+
+            else:
+                # merge/overwrite: resolve conflicts by selector item + at-rule stack.
+                incoming = collect_selector_item_bodies(frag)
+                existing = collect_selector_item_bodies(css_text)
+
+                keys_to_drop: set = set()      # do not add these incoming rules
+                keys_to_remove: set = set()    # remove these destination selector items before adding
+
+                # Determine conflicts and duplicates.
+                for key, inc_bodies in incoming.items():
+                    if not inc_bodies:
+                        continue
+                    inc_norm = normalize_css_body(inc_bodies[0])
+                    if key not in existing:
+                        continue
+
+                    ex_norms = {normalize_css_body(b) for b in existing.get(key, [])}
+                    if ex_norms and (ex_norms == {inc_norm}):
+                        # Exact duplicate already exists.
+                        keys_to_drop.add(key)
+                        continue
+
+                    # Conflict: same selector item exists with different body.
+                    if copy_mode == 'overwrite':
+                        keys_to_remove.add(key)
+                        continue
+
+                    # merge mode
+                    if args.force:
+                        # With --force, skip conflicting rules.
+                        keys_to_drop.add(key)
+                        continue
+
+                    if not sys.stdin.isatty():
+                        die(
+                            "Conflicting CSS rule(s) detected for --copy_tile_css:merge, but no TTY is available. "
+                            "Re-run with --force (to skip conflicting rules) or use --copy_tile_css:overwrite / :add / :replace."
+                        )
+
+                    stack, sel = key
+                    stack_txt = " > ".join(stack) if stack else "(top-level)"
+                    ans = input(
+                        f"CSS conflict for {stack_txt} selector '{sel}'. Keep existing [k] / overwrite [o] / abort [x]? [k/o/x]: "
+                    ).strip().lower()
+                    if ans.startswith('o'):
+                        keys_to_remove.add(key)
+                    elif ans.startswith('x'):
+                        raise SystemExit(1)
+                    else:
+                        # default keep
+                        keys_to_drop.add(key)
+
+                frag2, kept_blocks = drop_selector_items_by_keys(frag, keys_to_drop)
+                if kept_blocks == 0:
+                    if not args.quiet:
+                        ilog(f"--copy_tile_css:{copy_mode}: no changes (all rules already present or conflicts skipped).")
+                else:
+                    css_text2 = css_text
+                    if keys_to_remove:
+                        css_text2 = remove_selector_items_by_keys(css_text2, keys_to_remove)
+                    css_text2 = css_text2.rstrip() + "\n\n" + frag2.strip() + "\n"
+                    css_text = css_text2
+                    set_custom_css(obj, css_key, css_text)
+
+    if getattr(args, 'clear_tile_css', None) is not None:
+        from .util import ilog
+        from .css_ops import find_standalone_comment_tile_refs
+
+        tid = int(getattr(args, 'clear_tile_css'))
+        if css_key is None:
+            die("--clear_tile_css requires a JSON object input that can contain customCSS (full/minimal).")
+        existing_ids = {as_int(t, 'id') for t in tiles if t.get('id') is not None}
+        if tid not in existing_ids:
+            die(f"--clear_tile_css: tile id {tid} not found in layout.")
+
+        css_text = css_text or ""
+        css_text2 = cleanup_css_for_tile_ids(css_text, [tid])
+
+        # Optionally remove or rewrite standalone comments referencing this tile.
+        hits = find_standalone_comment_tile_refs(css_text2, {tid})
+        if hits:
+            remove_comments = prompt_yes_no(
+                args.force,
+                f"Also remove {len(hits)} standalone CSS comment(s) referencing tile-{tid}?",
+                default_yes=False,
+            )
+            css_text3, removed_cnt, rewritten_cnt = process_standalone_comments_for_css_cleared_tiles(
+                css_text2,
+                [tid],
+                remove=remove_comments,
+            )
+            if removed_cnt or rewritten_cnt:
+                css_text2 = css_text3
+                if args.verbose or args.debug:
+                    ilog(f"CSS comments: removed {removed_cnt} standalone comment(s), rewritten {rewritten_cnt} comment(s).")
+
+        if css_text2 != css_text:
+            css_text = css_text2
+            set_custom_css(obj, css_key, css_text)
+        else:
+            if not args.quiet:
+                ilog(f"--clear_tile_css: no selector rules found for tile-{tid}; no changes.")
+
     if args.cleanup_css and css_key is not None and css_text and (deleted_ids or cleared_ids):
         from .util import format_id_sample, prompt_yes_no_or_die
+        from .util import ilog, prompt_yes_no
+        from .css_ops import find_standalone_comment_tile_refs, process_standalone_comments_for_removed_tiles
 
         ids_to_clean = deleted_ids + cleared_ids
         details = f"--cleanup_css will remove CSS rules for {len(ids_to_clean)} tile id(s). IDs: {format_id_sample(ids_to_clean)}"
@@ -1201,6 +1412,27 @@ def main(argv: Optional[List[str]] = None) -> None:
             show_details=(args.verbose or args.debug),
         )
         css_text = cleanup_css_for_tile_ids(css_text, ids_to_clean)
+        # Optionally remove or neutralize standalone comments that reference the
+        # removed tile ids.
+        hits = find_standalone_comment_tile_refs(css_text, set(ids_to_clean))
+        if hits:
+            remove_comments = prompt_yes_no(
+                args.force,
+                f"Also remove {len(hits)} standalone CSS comment(s) referencing removed tile ids?",
+                default_yes=False,
+            )
+            css_text2, removed_cnt, rewritten_cnt = process_standalone_comments_for_removed_tiles(
+                css_text,
+                ids_to_clean,
+                remove=remove_comments,
+            )
+            if removed_cnt or rewritten_cnt:
+                css_text = css_text2
+                if args.verbose or args.debug:
+                    ilog(
+                        f"CSS comments: removed {removed_cnt} standalone comment(s), rewritten {rewritten_cnt} comment(s)."
+                    )
+
         set_custom_css(obj, css_key, css_text)
 
     if (not args.ignore_css) and css_key is not None and created_id_map:
@@ -1317,6 +1549,14 @@ def main(argv: Optional[List[str]] = None) -> None:
                 f"Use --scrub_css to remove. IDs: {format_id_sample(list(orphans))}"
             )
 
+        if args.compact_css:
+            from .css_ops import compact_css_stylesheet
+
+            css_compact = compact_css_stylesheet(css_text2)
+            if css_compact != css_text2:
+                css_text2 = css_compact
+                set_custom_css(obj, css_key, css_text2)
+
     # Strict overlap guard (extra safety): for move/copy/merge in strict mode, ensure the result has no overlaps
     # involving any changed tile. (Pre-flight checks should normally prevent this; this is a backstop.)
     overlap_ops = bool(
@@ -1409,39 +1649,58 @@ def main(argv: Optional[List[str]] = None) -> None:
             final_tiles = r_tiles_any
 
 
-    # Commit backup (atomic) and persist last-run state for --undo_last defaults.
+    # Persist last-run state for --undo_last.
+    # Important: CSS-only actions must be undoable too, even when tiles do not change.
+    # To avoid losing undo history on no-op runs, only update the last-run state when
+    # the layout content (tiles and/or customCSS) actually changed.
+    net_changed = False
+    try:
+        net_changed = (layout_fingerprint(original_obj) != layout_fingerprint(output_obj))
+    except Exception:
+        # Be conservative: if we can't fingerprint, assume it changed.
+        net_changed = True
+
     try:
         import time as _time
         import datetime as _dt
 
-        # If we created a new backup this run, commit it only after all outputs (and hub POST) succeeded.
-        if backup_tmp_path and backup_path and (not (args.lock_backup and os.path.exists(backup_path))):
-            os.replace(backup_tmp_path, backup_path)
-        now_epoch = int(_time.time())
-        state = {
-            # Global last-run backup (works for file/clipboard/hub imports)
-            "backup_obj": original_obj,
-            # Optional per-dashboard backup path (only meaningful when args.url is provided)
-            "backup_path": backup_path,
-            "last_outputs": outputs,
-            "last_url": args.url,
-            "last_output_format": args.output_format,
-            "last_import_kind": import_kind,
-            "state_written_at_epoch": now_epoch,
-            "state_written_at": _dt.datetime.fromtimestamp(now_epoch).isoformat(sep=" ", timespec="seconds"),
-        }
+        if net_changed:
+            # If we created a new backup this run, commit it only after all outputs (and hub POST) succeeded.
+            if backup_tmp_path and backup_path and (not (args.lock_backup and os.path.exists(backup_path))):
+                os.replace(backup_tmp_path, backup_path)
 
-        if posted and args.url:
-            # Fingerprint the last layout saved to hub so --undo_last can detect external changes.
-            try:
-                state["last_hub_saved_hash"] = layout_fingerprint(output_obj)
-                state["last_hub_saved_at_epoch"] = now_epoch
-            except Exception:
+            now_epoch = int(_time.time())
+            state = {
+                # Global last-run backup (works for file/clipboard/hub imports)
+                "backup_obj": original_obj,
+                # Optional per-dashboard backup path (only meaningful when args.url is provided)
+                "backup_path": backup_path,
+                "last_outputs": outputs,
+                "last_url": args.url,
+                "last_output_format": args.output_format,
+                "last_import_kind": import_kind,
+                "state_written_at_epoch": now_epoch,
+                "state_written_at": _dt.datetime.fromtimestamp(now_epoch).isoformat(sep=" ", timespec="seconds"),
+            }
+
+            if posted and args.url:
+                # Fingerprint the last layout saved to hub so --undo_last can detect external changes.
+                try:
+                    state["last_hub_saved_hash"] = layout_fingerprint(output_obj)
+                    state["last_hub_saved_at_epoch"] = now_epoch
+                except Exception:
+                    state["last_hub_saved_hash"] = None
+            else:
                 state["last_hub_saved_hash"] = None
-        else:
-            state["last_hub_saved_hash"] = None
 
-        _write_state(state)
+            _write_state(state)
+        else:
+            # No net change: do not overwrite last-run state or backup. Remove any uncommitted temp backup.
+            if backup_tmp_path and os.path.exists(backup_tmp_path):
+                try:
+                    os.remove(backup_tmp_path)
+                except Exception:
+                    pass
     except Exception:
         pass
 

@@ -23,15 +23,27 @@ Output destinations (repeatable; default is clipboard if none specified):
   --output:file <filename>
   --output:hub                      (requires --url; FULL input only)
 
-Output format (optional; default matches input):
+Output format (optional; default matches input; cannot exceed input):
   --output_format:full | minimal | bare
 
-Actions (at most ONE per run):
+JSON formatting:
+  --indent N
+  --minify
+  --newline keep|lf|crlf
+
+Layout actions (at most ONE per run):
   Insert:  --insert_rows COUNT AT_ROW
            --insert_cols COUNT AT_COL
   Move:    --move_cols START END DEST
            --move_rows START END DEST
            --move_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+  Copy:    --copy_cols START END DEST
+           --copy_rows START END DEST
+           --copy_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+  Merge:   --merge_cols START END DEST
+           --merge_rows START END DEST
+           --merge_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+           --merge_source <filename> OR --merge_url <dashboard_url>
   Delete:  --delete_rows START END
            --delete_cols START END
   Clear:   --clear_rows START END
@@ -40,22 +52,22 @@ Actions (at most ONE per run):
   Crop:    --crop_to_rows START END
            --crop_to_cols START END
            --crop_to_range TOP LEFT BOTTOM RIGHT
-  Prune:   --prune_except_ids <id1,id2,...>
-           --prune_except_devices <dev1,dev2,...>
-           --prune_ids <id1,id2,...>
-           --prune_devices <dev1,dev2,...>
-  Copy:    --copy_cols START END DEST
-           --copy_rows START END DEST
-           --copy_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-  Merge:   --merge_cols START END DEST
-           --merge_rows START END DEST
-           --merge_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-           --merge_source <filename> OR --merge_url <dashboard_url>
+  Prune:   --prune_except_ids <spec>
+           --prune_except_devices <spec>
+           --prune_ids <spec>
+           --prune_devices <spec>
+  Tile CSS:
+           --copy_tile_css:merge FROM_TILE TO_TILE
+           --copy_tile_css:overwrite FROM_TILE TO_TILE
+           --copy_tile_css:replace FROM_TILE TO_TILE
+           --copy_tile_css:add FROM_TILE TO_TILE
+           --clear_tile_css TILE_ID
 
-Optional follow-up actions:
-  --trim[:top|left|top,left]        (runs after movement, before sort)
-  --sort[:<keys>]                   (runs last; default keys are irc)
+Additional actions (may be combined with the single layout action):
+  --trim[:top|left|top,left]        (runs after layout action, before sort)
+  --sort[:<keys>]                   (runs after trim; default keys are irc)
   --scrub_css                       (runs last; can run alone)
+  --compact_css                     (runs last; can run alone)
 
 Modifiers:
   --include_overlap
@@ -63,31 +75,25 @@ Modifiers:
   --col_range <start> <end>         (insert_rows only)
   --allow_overlap / --skip_overlap  (move/copy/merge)
   --force                           (skip confirmation prompts)
-  --cleanup_css                     (remove tile-specific CSS for deleted/cleared/cropped/pruned tiles)
+  --cleanup_css                     (remove tile-specific CSS for removed tiles)
   --ignore_css                      (do not copy/create CSS for copy/merge)
 
 Hubitat direct mode:
   --url <dashboard_url>
-  --undo_last                       (standalone; restore last backup to last outputs unless --output is provided)
-  --confirm_keep                    (prompt to keep; if not, restore backup)
-  --lock_backup                     (preserve existing backup; reuse it as restore point)
+  --undo_last
+  --confirm_keep
+  --lock_backup
 
 Maps:
-  --show_map                 (print BEFORE / OUTCOME maps)
+  --show_map
   --map_focus full|conflict|no_scale
-                            (default: full; no_scale disables minimap scaling)
-
-Diagnostics:
-  --quiet                    (suppress status line)
-  --verbose                  (more detail)
-  --debug                    (per-tile + stack details)
 
 More help:
   --help_full
   --version
 '''
 
-FULL_HELP = r"""hubitat_tile_mover — adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
+FULL_HELP = r"""hubitat_tile_mover � adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
 
 Accepted input JSON shapes (3 levels):
   A) Full:    { ..., "tiles": [ {...}, ... ], ... }
@@ -97,29 +103,24 @@ Accepted input JSON shapes (3 levels):
 Import (input) (only one; default is clipboard):
   --import:clipboard
   --import:file <filename>
-  --import:hub              (requires --url)
+  --import:hub  (requires --url <dashboard local url)
 
 Output destinations (repeatable; default is clipboard if none specified):
   --output:terminal
   --output:clipboard
   --output:file <filename>
-  --output:hub           (requires --url; full JSON only)
+  --output:hub (requires --url <dashboard local url)
 
 Output format (single choice; default matches the input level; cannot exceed input):
   --output_format:full       (Full dashboard JSON)
-  --output_format:minimal    ({"tiles":[...]})
-  --output_format:bare       ([...])
+  --output_format:minimal    ({"tiles":[...]}) (cannot be used with --output:hub)
+  --output_format:bare       ([...]) (cannot be used with --output:hub)
 
-  Compatibility aliases (accepted):
-    --output_format:container  == minimal
-    --output_format:list       == bare
-
-Hubitat direct mode (optional):
-  --url <dashboard_url>     (required for --import:hub and/or --output:hub)
-  --undo_last               (restore from the last backup and write to outputs)
-  --confirm_keep            (after writing changed output(s), prompt to keep; if not, restore backup)
-  --lock_backup             (do not overwrite existing backup; reuse as restore point)
-                           Backup file is stored in the current working directory and is per-dashboard.
+Undo Actions (from output saved directly to hub)
+  --undo_last (restores changes saved to hub by previous run)
+  --confirm_keep (prompts to keep changes saved directly to hub)
+  --lock_backup (keep existing undo file as current restore point)
+  Note: undo files are maintained per dashboard.
 
 
 LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
@@ -147,7 +148,6 @@ LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
 
     Merge / import tiles from another layout:
       --merge_source <filename>
-      --merge_url <dashboard_url>
       --merge_cols START_COL END_COL DEST_START_COL
       --merge_rows START_ROW END_ROW DEST_START_ROW
       --merge_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
@@ -174,22 +174,13 @@ LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
       Notes: the kept range must contain at least one tile; at least one tile must remain.
 
     Prune (remove everything EXCEPT matching tiles):
-      --prune_except_ids <id-spec>
-      --prune_except_devices <device-spec>
+      --prune_ids <SPEC>
+      --prune_devices <SPEC>
+      --prune_except_ids <SPEC>
+      --prune_except_devices <SPEC>
       Modifiers: --cleanup_css, --force
-      Notes: at least one tile must match the provided ids/devices; at least one tile must remain.
-
-    Prune (remove matching tiles):
-      --prune_ids <id-spec>
-      --prune_devices <device-spec>
-      Modifiers: --cleanup_css, --force
-      Notes: at least one tile must match the provided ids/devices; at least one tile must remain.
-
-      id/device specs support comma-separated values and numeric expressions:
-        1,5,8,9        (explicit ids)
-        5-10           (inclusive range)
-        <5, <=5, >5, >=5  (expands to 0..N-1 / 0..N / N+1..MAX / N..MAX)
-      For devices, numeric expressions match device strings like "0","1","2",...
+      SPEC supports: comma lists (1,5,8), ranges (5-10), comparisons (<5, >=7). For devices, numeric specs match device strings "0","1",...
+      Notes: at least one tile must match; at least one tile must remain.
 
 
 ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
@@ -216,18 +207,46 @@ ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
       If --scrub_css is NOT specified and orphans are detected, the program warns how many were found.
 
 
+
+  Tile CSS actions (modify customCSS; can run alone):
+    Copy CSS from one existing tile id to another existing tile id:
+      --copy_tile_css:merge FROM_TILE TO_TILE
+      --copy_tile_css:overwrite FROM_TILE TO_TILE
+      --copy_tile_css:replace FROM_TILE TO_TILE
+      --copy_tile_css:add FROM_TILE TO_TILE
+      Notes:
+        :merge prompts per conflicting rule (keep/overwrite/abort). With --force, conflicts are skipped.
+        :overwrite overwrites conflicting destination rules automatically.
+        :replace removes destination tile rules first, then copies all source tile rules.
+        :add copies all rules regardless of conflicts (may create duplicates).
+      Rule duplication uses the same remap behavior as tile copy/merge (selector remap and body rewrite of tile-OLD→tile-NEW).
+
+    Clear CSS for an existing tile id (tile remains):
+      --clear_tile_css TILE_ID
+
+
+  Compact CSS (performed last; can run alone):
+    --compact_css
+      Rewrites customCSS as one selector rule per line (selector { body }), splits selector lists, and sorts lines.
+      Sorting: non-tile class selectors (start with '.' but not .tile-N) first, then tile selectors (#tile-N/.tile-N) by N, then everything else.
+  Layout Maps: (Show in terminal before and after layouts, movement conflicts)
+    --show_map                 (print BEFORE / OUTCOME maps)
+    --map_focus full|conflict|no_scale  (default: full; conflict maps only)
+    Note: Show map can be used without an action to display the current layout of the import dashboard.
+
 MODIFIERS
 
   Selection / overlap:
     --include_overlap
       Default selection: tiles are selected when their top-left (row,col) is inside the source/range.
       With --include_overlap: tiles are also selected when their span intersects the source/range
-      (span uses rowSpan/colSpan when present; best-effort fallbacks include width/height,
-       sizeX/sizeY, xSpan/ySpan, tileWidth/tileHeight, cols/rows, and nested size:{x,y}).
+      (span uses rowSpan/colSpan; missing span defaults to 1x1).
 
   Insert/Delete range filters (limit which tiles are affected):
     --col_range <start_col> <end_col>     (only with --insert_rows and --delete_rows)
     --row_range <start_row> <end_row>     (only with --insert_cols and --delete_cols)
+      example: --insert_rows 5 10 --col_range 2 7 ==> insert 5 rows at row 10 only in columns 2-7
+
 
   Destination conflict policy (move/copy/merge only):
     --allow_overlap
@@ -242,21 +261,6 @@ MODIFIERS
       Skip interactive confirmations when tiles or CSS rules would be removed.
 
 
-MAPS
-
-  --show_map
-      Print a BEFORE MAP (input) and OUTCOME MAP (after applying the action).
-      In the outcome map: changed tiles are green; overlap portions are red (or yellow with --allow_overlap).
-
-  --map_focus full|conflict|no_scale
-      full: show the full bounds of the layout (default; scaled to fit terminal)
-      conflict: zoom to the conflict/overlap region (scaled)
-      no_scale: 1 row/col == 1 character (map matches layout size; may be very large)
-
-  Notes:
-      Some operations may also print a CONFLICT MAP when destination conflicts are detected.
-      In conflict maps: stationary tiles are gray, moved/copied tiles are green, and conflicts are red/yellow.
-
 CSS OPTIONS
 
   --ignore_css
@@ -266,17 +270,10 @@ CSS OPTIONS
       When tiles are removed (delete/clear/crop/prune), attempt to remove tile-specific CSS rules for those tile ids.
       Prompts before removal unless --force is specified.
 
-  Tile id assignment when copying/merging:
-      New tile ids are assigned sequentially starting at:
-        1 + max(highest existing tile id, highest tile id referenced in customCSS)
-      This prevents newly created tiles from accidentally reusing ids that still have orphan CSS rules.
-
-
-FORMATTING
-
-  --indent N               Pretty JSON indent spaces per nesting level (N can be 0; default: 2)
-  --minify                 Compact one-line JSON (overrides --indent)
-  --newline keep|lf|crlf   Normalize output newlines
+  Note: Tile id assignment when copying/merging:
+        New tile ids are assigned sequentially starting at:
+            1 + max(highest existing tile id, highest tile id referenced in customCSS)
+        This prevents newly created tiles from accidentally reusing ids that still have orphan CSS rules.
 
 
 DIAGNOSTICS
@@ -285,6 +282,24 @@ DIAGNOSTICS
   --verbose                Planned actions summary to STDERR
   --debug                  Per-tile action logs to STDERR
 
+
+
+  Copyright 2026 Andrew Peck
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+
+  --version  Print build version and exit.
 """
 
 
@@ -426,6 +441,51 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("--prune_ids", "--prune-ids", metavar="SPEC", type=str, help="(see --help_full for details)")
     ops.add_argument("--prune_devices", "--prune-devices", metavar="SPEC", type=str, help="(see --help_full for details)")
 
+    # CSS-only actions (operate on customCSS/customCss; tiles are unchanged)
+    ops.add_argument(
+        "--copy_tile_css:merge",
+        "--copy-tile-css:merge",
+        dest="copy_tile_css_merge",
+        nargs=2,
+        metavar=("FROM_TILE", "TO_TILE"),
+        type=int,
+        help="Copy tile-specific CSS (merge): prompt per conflicting rule; --force skips conflicts",
+    )
+    ops.add_argument(
+        "--copy_tile_css:overwrite",
+        "--copy-tile-css:overwrite",
+        dest="copy_tile_css_overwrite",
+        nargs=2,
+        metavar=("FROM_TILE", "TO_TILE"),
+        type=int,
+        help="Copy tile-specific CSS (overwrite): overwrite conflicting destination rules",
+    )
+    ops.add_argument(
+        "--copy_tile_css:replace",
+        "--copy-tile-css:replace",
+        dest="copy_tile_css_replace",
+        nargs=2,
+        metavar=("FROM_TILE", "TO_TILE"),
+        type=int,
+        help="Copy tile-specific CSS (replace): remove destination tile rules first, then copy source rules",
+    )
+    ops.add_argument(
+        "--copy_tile_css:add",
+        "--copy-tile-css:add",
+        dest="copy_tile_css_add",
+        nargs=2,
+        metavar=("FROM_TILE", "TO_TILE"),
+        type=int,
+        help="Copy tile-specific CSS (add): copy all rules regardless of conflicts (may create duplicates)",
+    )
+    ops.add_argument(
+        "--clear_tile_css",
+        "--clear-tile-css",
+        metavar="TILE_ID",
+        type=int,
+        help="Remove tile-specific CSS rules for a tile id (does not remove the tile)",
+    )
+
 
     ops_grp.add_argument("--merge_source", "--merge-source", default=None, help="(see --help_full for details)")
 
@@ -454,9 +514,13 @@ def build_parser() -> argparse.ArgumentParser:
     css_grp = p.add_argument_group("CSS")
     css_grp.add_argument("--cleanup_css", "--cleanup-css", action="store_true", help="Remove tile-specific CSS rules for deleted/cleared tiles (best-effort)")
     css_grp.add_argument("--ignore_css", "--ignore-css", action="store_true", help="Do NOT create/copy tile-specific CSS rules for new ids when copying/merging (default is to create/copy)")
+    # NOTE: copy-tile-css modes are expressed as action switches in the Operations group:
+    #   --copy_tile_css:merge / :overwrite / :replace / :add
     # Legacy (no-op): historically enabled CSS creation; now creation/copy is the default.
     css_grp.add_argument("--create_css", "--create-css", dest="legacy_create_css", action="store_true", help=argparse.SUPPRESS)
     css_grp.add_argument("--scrub_css", "--scrub-css", action="store_true", help="Remove orphan tile-specific CSS rules (no matching tile id) after actions")
+    css_grp.add_argument("--compact_css", "--compact-css", action="store_true", help="Compact/sort customCSS: one rule per line starting with selector (runs last; can run alone)")
+
 
     diag_grp = p.add_argument_group("Diagnostics")
     diag_grp.add_argument("--show_map", dest="show_map", action="store_true", help="Show BEFORE/AFTER ASCII layout maps in the terminal")

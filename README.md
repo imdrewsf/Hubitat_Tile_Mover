@@ -24,15 +24,19 @@
     - [Crop](#crop)
     - [Prune](#prune)
     - [Trim](#trim)
+- [CSS Actions](#css-actions)
+    - [CSS Layout Actions](#css-layout-actions)
 - [Supplemental Actions and Options](#supplemental-actions-and-options)
     - [Sort](#sort)
     - [Visual Layout Maps](#visual-layout-maps)
     - [Miscellaneous Options:](#miscellaneous-options)
     - [Help](#help)
 - [Custom CSS Handling - Capabilities and Limitations](#custom-css-handling---capabilities-and-limitations)
+    - [Rule Processing Overview](#rule-processing-overview)
     - [Compatible CSS Rules Types:](#compatible-css-rules-types)
     - [Incompatible and Problematic CSS Selector Types](#incompatible-and-problematic-css-selector-types)
-    - [Incompatible and Problematic CSS Rules Bodies](#incompatible-and-problematic-css-rules-bodies)
+    - [Tile-IDs in Rule Bodies](#tile-ids-in-rule-bodies)
+    - [CSS Comment Blocks With Tile References](#css-comment-blocks-with-tile-references)
 - [Usage Examples:](#usage-examples)
 - [Batch Actions:](#batch-actions)
     - [Tips for running a batched or consecutive actions:](#tips-for-running-a-batched-or-consecutive-actions)
@@ -45,6 +49,7 @@
             - [The third action:](#the-third-action)
 
 <!-- /TOC -->
+
 <div style="page-break-after: always"></div>
 
 <a id="markdown-overview" name="overview"></a>
@@ -507,6 +512,33 @@ Removes blank rows above the top-most tile and/or blank columns left of the left
 
 <div style="page-break-after: always"></div>
 
+<a id="markdown-css-actions" name="css-actions"></a>
+
+## CSS Actions
+
+<a id="markdown-css-layout-actions" name="css-layout-actions"></a>
+
+### CSS Layout Actions
+
+- Copy CSS Rules
+  Copies CSS rules from one tile to another.  Similar to the copy layout action but does not create a new tile.  Copy functions are considered primary laytout actions.  Only one copy action can be used per run.
+  
+  - `--copy_tile_css:merge <from_tile-id> <to_tile-id>` —  Copies rules checking for conflicts with existing rules.  Conflicts generate user prompts to overwrite or keep the rules in the destination tile.  Default is overwrite.
+    <br>
+  - `--copy_tile_css:replace <from_tile-id> <to_tile-id>` — Removes all rules for the destination tile and replaces them with the rules being copied.
+    <br>
+  - `--copy_tile_css:overwrite <from_tile-id> <to_tile-id>` — Copies rules and overwrites any conflicting rules.  This is the same as `--copy_tile_css:merge --force.`
+    <br>
+  - `--copy_tile_css:add <from_tile-id> <to_tile-id>` — Copies all rules to the target tile, regardless of any potential conflicts.
+    <br>
+  - `--clear_tile_css <tile-id>` — Removes all CSS rules for the specified tile.
+    <br>
+- Options:
+  
+  - `--force` — skip confirmation prompts -- assume yes.
+
+<div style="page-break-after: always"></div>
+
 <a id="markdown-supplemental-actions-and-options" name="supplemental-actions-and-options"></a>
 
 ## Supplemental Actions and Options
@@ -520,19 +552,17 @@ Changes the order tiles appear in the dashboard layout JSON only
 - Actions:
   
   - `--sort:<spec>`
-
+    
     <br>
-
 - Sort Keys:
   
   - `[-]i` = id
   - `[-]r` = row
   - `[-]c` = col
     <br>
-  - Sort order for keys is ascending unless preceded by a "`-`" 
-
+  - Sort order for keys is ascending unless preceded by a "`-`"
+  
   <br>
-
 - Notes:
   
   - Sorting only changes the order tiles are listed in the layout JSON.  It has no effect on the order tiles appear on the dashboard.
@@ -562,12 +592,12 @@ Show before, outcome and conflict layout previews in the terminal
     <br>
 - Map Legend:
   
-  <span style="color:lightgray">· </span>(gray dot) - empty spaces
-  <span style="color:lightgray">█ </span> (gray) - unaffected tiles
-  <span style="color:orange">█  </span> (orange) - tiles in the target row, column or range before changes are made
-  <span style="color:lime">█  </span> (green) - tiles successfully changed by the action or portions not in conflict.
-  <span style="color:red">█ </span> (red) - tiles (or portions) in conflict that caused the action to fail.
-  <span style="color:yellow">█ </span> (yellow) - tiles (or portions) conflicts allowed by `--allow_overlap`
+  <span style="color:lightgray">· </span>(gray dot) - empty spaces  
+  <span style="color:lightgray">█ </span> (gray) - unaffected tiles  
+  <span style="color:orange">█  </span> (orange) - tiles in the target row, column or range before changes are made  
+  <span style="color:lime">█  </span> (green) - tiles successfully changed by the action or portions not in conflict.  
+  <span style="color:red">█ </span> (red) - tiles (or portions) in conflict that caused the action to fail.  
+  <span style="color:yellow">█ </span> (yellow) - tiles (or portions) conflicts allowed by `--allow_overlap`  
 
 ---
 
@@ -584,17 +614,15 @@ Show before, outcome and conflict layout previews in the terminal
 - Safety / Undo Options:
   
   - `--lock_backup` — Retains the last undo backup (if found) as the undo backup for the current action.
-  - `--undo_last` — Load the undo backup (if found) and writes it to the previous actions output destination.  `--undo_last` may be used with `--output:<type>` to override where the undo will be restored to.  However, the restore destination type match the specified output type.  For example, if the last output was a file, a new filename can be specified but the new output type be file.  
-
+  - `--undo_last` — Load the undo backup (if found) and writes it to the previous actions output destination.  `--undo_last` may be used with `--output:<type>` to override where the undo will be restored to.  However, the restore destination type match the specified output type.  For example, if the last output was a file, a new filename can be specified but the new output type be file.
   - Backup files contain the JSON imported before an action is performed.  The backup file is not created however, until after the action completes and the result has been successfully saved to the output destination.
   - When restoring directly to the hub, there are additional safeguards in place to prevent:
+    
     - Restoring and overwriting a different dashboard than the dashboard layout in the undo_file (a different `--output:hub --url <local dashboard url>` is specified with the `--undo_last` action.)
     - Restoring an older backup than intended. (Undo is older than 5 minutes)
     - Edits made to a dashboard after the backup was created (The current dashboard layout stored on the hub does not match the layout that was uploaded last)
   - A confirmation prompt will be presented if any of the safeguards are triggered.  Use `--force` to suppress prompts.
-
-     
-
+    
     <br>
 - Output / Debug Information Options:
   
@@ -623,39 +651,58 @@ Show before, outcome and conflict layout previews in the terminal
 
 ## Custom CSS Handling - Capabilities and Limitations
 
-- New ids are generated for each new tile created when copying or merging. Custom CSS is then searched for references to the original tile's id such as #tile-<original id> or .tile-<original id>.  Matches are analyzed to determine if the reference a selector or part of a rule.  However, references to objects can come in many different forms and CSS can be formatted a lot of different ways.  While there is some logic to parse matches and extract rules correctly, it is limited to simple, single and multi-selector rules.  Compound selectors, complex rules or comments that contain "tile-##" may lead to a number of issues:
+When tiles are added or removed by actions, custom CSS is parsed and searched for references to the original tile's id, such as "#tile-123" or ".tile-123".  Matches are analyzed to determine if the they are selectors, part of a rule body or a comment.
 
+<a id="markdown-rule-processing-overview" name="rule-processing-overview"></a>
 
-  - Conflicting or overlapping rules
-  - Orphaned rules
-  - Rules with references to orphaned tiles
-  - Comment blocks with references to orphaned tiles
-  - Unresolvable orphaned rule warnings
-  - Inconsistent tile ID generation 
+### Rule Processing Overview
 
-- CSS rule processing can be disabled when working with a dashboard with incompatible custom CSS by using the `--ignore_css` option  with most layout actions.  Additionally, avoid using the `--cleanup_css` option and the `--scrub_css` actions.  Tiles will be created without any CSS rules and no rules will be removed when tiles are deleted or cleared.
-
+- Rules for tiles are determined by matching rules with tile-ids within the selector, not the rule body.
+- In almost all instances, only the rule selector is modified when a rule is duplicated in order to point it to a newly copied or merged tile.  The rule body is almost always duplicated verbatim.
+- CSS rule parsing is very basic and is only intended for use with relatively simple rulesets.
+- Compound selectors and certain complex rules are beyond the scope of this tool and are not compatible.
+- Rules that contain tile references like "#tile-xx" or ".tile-xx", should be avoided if at all possible.
+- Comments are generally ignored unless they are contained within rule bodies or are standalone comment blocks directly referencing a single existing tile.
+  <br>
+- When working with dashboards with containing incompatible or problematic customCSS rules:
+  - Disable CSS processing by using the `--ignore_css` option with most actions.
+  - Avoid using the `--copy-tile-css`, `--cleanup_css` and `--scrub_css` actions
 
 <a id="markdown-compatible-css-rules-types" name="compatible-css-rules-types"></a>
 
 ### Compatible CSS Rules Types:
 
-- ✅ Simple, single-selector rules:
-  
-  `#tile-40 { ... }`
-  `#tile-20 { ... }`
+- ✅ **Simple, single-selector rules:**
+  - For new tiles created by copy or merge actions, the source tile's rule body is duplicated verbatim and the selector is changed to the new tile's id.<br>
+    `#tile-123 { <rule_body> }` ➡️  `#tile-123 { <rule_body> }`  
+    `                                #tile-141 { <rule_body> }`  
+    <br>
+  - For removed tiles, the selector of the target tile and it's rule body are removed.  
+    `#tile-123 { <rule_body> }` ➡️ `<blank>                  `
 
 <br>
 
-- ✅ Simple, multi-selector rules:
-  
-  `#tile-40, #tile-20, #tile-60 { ... }`
+- 🆗 **Simple, multi-selector rules:**<br>
+  - For new tiles created by copy or merge actions, a new rule is single selector rule is created for the new tile-id and the rule body is copied verbatim. <br>
+    `#tile-40, #tile-20, #tile-123 { <rule_body> }` ➡️  `#tile-40, #tile-20, #tile-123 { <rule_body> }`  
+    `                                                    #tile-141 { <rule_body> }                   `  
+    <br>
+  - For removed tiles, only the selector matching the tile-id is removed.  If no selectors remain, the rule body is removed.<br>  
+    `#tile-40, #tile-20, #tile-123 { <rule_body> }` ➡️  `#tile-40, #tile-20 { <rule_body> }`<br>
 
 <br>
 
-- ✅ Simple, single and multi-selector rules inside @media blocks:
-  
-  `@media (max-width: 600px) { #tile-80 { display: none !important; }`
+- ✅ **Simple, single and multi-selector rules inside @media blocks:**
+  - For new tiles created by copy or merge actions, a new rule is created inside the media block, with the new tile-id selector and the original rule verbatim. <br>
+    `@media (max-width: 600px) { #tile-123 { display: none !important; }  } `  
+    `⬇️                              ⬇️                                ⬇️ `  
+    `@media (max-width: 600px) { #tile-123 { display: none !important; }    `  
+    `                            #tile-141 { display: none !important; }  }`  
+    <br>
+  - For removed tiles, only the selector matching the tile-id is removed from the media block with its rule body.  If no rules remain, the media block remains empty.<br>
+    `@media (max-width: 600px) { #tile-123 { display: none !important; }  }`  
+    `⬇️                              ⬇️                               ⬇️ `  
+    `@media (max-width: 600px) { <blank>  }                                `  
 
 <br>
 
@@ -663,91 +710,149 @@ Show before, outcome and conflict layout previews in the terminal
 
 ### Incompatible and Problematic CSS Selector Types
 
-- ❌ Multi / Compound Class Selectors:
+- Certain types of selectors can't be simply copied with new tile-ids or removed without creating potential conflicting, overlapping, or otherwise broken CSS.  These selector types are not common in dashboard CSS and should be avoided.
   
-  `.tile-80.tile-40 { ... }`
+  - ❌ Multi / Compound Class Selectors:
+    
+    `.tile-80.tile-123 { <rule_body> }`   ➡️   `.tile-80.tile-123 { <rule_body> }`    
+    `                                 `   🚫   `.tile-80.tile-141 { <rule_body> }`    
+  
+  <br>
+  
+  - ❌ Child Combinators
+    
+    `.tile-80 > .tile-123 { <rule_body> }`   ➡️   `.tile-80 > .tile-123 { <rule_body> }`    
+    `                                    `   🚫   `.tile-80 > .tile-141 { <rule_body> }`  
+  
+  <br>
+  
+  - ❌ Descendent Rules:
+    
+    `#tile-80 #tile-123 .icon { <rule_body> }`   ➡️   `#tile-80 #tile-123 .icon { <rule_body> }`  
+    `                                        `   🚫   `#tile-80 #tile-141 .icon { <rule_body> }`  
+  
+  <br>
+
+  - ❌ Rules without tile-id selectors :<br>
+
+    `.some-class::after {content: "something goes here"}`  
+    `.tile .tile-content { padding: 0px; );`  
+    
+    
+
+<a id="markdown-tile-ids-in-rule-bodies" name="tile-ids-in-rule-bodies"></a>
+
+### Tile-IDs in Rule Bodies
+
+
+- In most instances, rule bodies are copied verbatim.  If the rule body contains a reference to a tile-id that does not match the tile-id in the rules selector,  it will remain unchanged when it is copied to a new selector tile-id.<br>
+
+  ✅ Tile-id in rule body matches rule selector
+
+  `#`<span style="color: red"><b>tile-123</b></span>` .tile-content { background-image: url("/local/images/`<span style="color: red"><b>tile-123</b></span>`.png");}`    
+  `⬇️                                        ⬇️                                       ⬇️ `  
+  `#`<span style="color: red"><b>tile-141</b></span>` .tile-content { background-image: url("/local/images/`<span style="color: red"><b>tile-141</b></span>`.png");}`  
+
+  <br>
+
+  🟡  Tile-id in rule body does not match the rule selector  
+  `#tile-123 .tile-content { background-image: url("/local/images/`<span style="color: red"><b>tile-999</b></span>`.png");}`    
+  `⬇️                                    ⬇️                                     ⬇️ `   
+  `#tile-141 .tile-content { background-image: url("/local/images/`<span style="color: red"><b>tile-999</b></span>`.png");}`  
+
+<a id="markdown-css-comment-blocks-with-tile-references" name="css-comment-blocks-with-tile-references"></a>
+
+### CSS Comment Blocks With Tile References
+
+- The CSS parser recognizes and ignores most comment blocks.
+- Comments that do not reference specific tiles (#tile-xx, .tile-xx) are always ignored.
+- Comments with references to specific tiles are ignored if there are no active rules for the referenced tile in the style sheet.
+- Depending on where a comment is located, it may be included in CSS operations, if it contains text matching the tile-id selector of a rule that is being copied or removed.  For example, if tile-123 is being copied to tile-141, CSS rules with a selector "#tile-123" or ".tile-123" will be duplicated with the new selector "tile-141".  If a comment block contains the text "#tile-141", it may be duplicated with the new tile-id, depending on where it is located.
+
+  - Standalone and top-level comment blocks
+  
+    These include:
+    - Standalone statements in the top-level of the style sheet
+    - Comments inside `@media` blocks that are not within any declaration bodies
+    - Top-level comment blocks containing one or more top-level rule, with tile specific selectors and complete rule bodies. 
+  
+    
+    Standalone comments are included in CSS operations only when:
+    - The comment references the tile being copied or merged
+    - The comment references no more than 1 tile
+    - At least one rule with the referenced tile-id will be duplicated.
+    
+    When copying or merging tiles, comments that meet these conditions:
+    - Comment block will be duplicated once per original tile-id
+    - The tile-id of the original tile will be remapped to the new tile-id.
+    - The duplicate comment block will be annotated to document the original tile-id  
+
+      `/* tile-123 comment block */`  ➡️   `/* [Copy of-123] tile-141 comment block */`  
+      `tile-123 {padding: 5px}     `  ➡️   `tile-141 {padding: 5px}                   `  
+      
+    Comments meeting these conditions can be removed during `--clean_css` and `--scrub_css` actions.
+    - Confirmation prompts will be generated once per tile if comments are found referencing that tile-id
+    - Answering yes will remove all comments that reference the tile-id being deleted.
+    - Answering no will:
+      - Leave the comment in place.  
+      - Annotate the comment to document that the tile it references was deleted
+      - Change all tile-xx references within the comment to tile_xx to prevent the comment from being seen as potentially active.  
+
+    Rules contained within comment block delimiters (commented out rules):
+    - If target tile-ids are found in a comment block, the block is parsed to determine if the comment contains valid CSS rules with a selector matching the target tile-id.
+    - If no valid rules are located, the comment block is treated as a standard standalone comment.  
+    - If one or more valid rules are found in the comment block with selectors containing the target tile-id:
+      - Rules with selectors that contain the target tile-id are extracted.
+      - Extracted rules are processed as normal CSS rules.
+      - When copying or merging tiles, the duplicated CSS will placed back inside comment delimiters.
+      - The duplicated comment block will only contain the individual duplicated rules.   All other content in the original comment block is ignored.
+    - If valid rules are located but none have selectors which contain the target tile-id, the comment block will be treated as a standard standalone comment.
+
+      `tile-123 {padding: 5px}        `   ➡️   `tile-141 {padding: 5px}                               `   
+      `/* tile-123 is space holder */ `  ➡️  `/* [copied from tile-123] tile-141 is space holder */ `   
+      `/* tile-123 {color: red;}      `   ➡️   `/* tile-141 {color: red;} */                          `    
+      ` Some comment text ...           `   ➡️   `                                                      `    
+      ` tile-136 {color: red;} */       `   ➡️   `                                                      `   
+
+      In this example, the CSS on the left contains an active rule for tile-123 and a comment block that contains "tile-123".  
+      - The active rule is duplicated with the selector changed to the new tile's id.  
+      - The first comment block is duplicated with the new tile-id.  The old tile-id is documented.
+      - The comment block is parsed for valid CSS with selectors matching the target tile-id
+      - Two rules are parsed from the comment block.  Only one rule with a selector containing the target tile-id is extracted.
+      - The extracted rule is duplicated with the selector changed to the new tile's id and is added to a to a new comment block.
+      - The text within the comment block is ignored and not duplicated.
+      - The second rule has a selector with a different tile-id.  It is considered text and is not duplicated.
+    
+<br>
+
+  - Comments within rule bodies are duplicated verbatim with the rest of the rule body.  
+  
+    <span style="color: lime"><b>tile-123</b></span>` {padding: 5px /* Rule comment about `<span style="color: lime"><b>tile-123</b></span>` */}  `  
+    `⬇️                          ⬇️                           ⬇️ `   
+    <span style="color: red"><b>tile-141</b></span>` {padding: 5px /* Rule comment about `<span style="color: red"><b>tile-123</b></span>` */}   `  
 
 <br>
 
-- ❌ Child Combinators
   
-  `#tile-80 > .tile-60 { ... }`
+  - Inside selectors (selector prelude)
 
-<br>
+  `Standalone comments:
 
-- ❌ Descendent Rules:
-  
-  `tile-80 #tile-40 .icon { ... }`
+The contents of comment blocks within customCSS is ignored.  Tile references between the start and end delimiters are not scanned when checking for orphans and are not used when determining the highest referenced tile-id for new tile ids.  Comments can be difficult to parse depending on where they are placed.  
 
-<a id="markdown-incompatible-and-problematic-css-rules-bodies" name="incompatible-and-problematic-css-rules-bodies"></a>
+Comment
 
-### Incompatible and Problematic CSS Rules Bodies
-
-- ❌ Tile id's in `content:` or other string values
-
-  `.some-class::after {content: "`<span style="color: red"><b>tile-123</b></span>"`}`
-
-  <br>
-
-- ❌ Tile id's embedded in urls.
-
-  `.tile .tile-content { background-image: url("/local/tile-images/`<span style="color: red"><b>tile-123</b></span>.png"`);}`
-
-  <br>
-
-- ❌ CSS variables keyed by id
-
-  `:root {`<span style="color: red"><b>--tile-123</b></span>`-accent: #ffcc00 }`
-
-  <br>
-
-    Copying "tile-123" and creating "tile-141" could result in conflicting rules.  For example:
-
-  `.some-class::after {content: "`<span style="color: red"><b>tile-123</b></span>"`}`
-  `.some-class::after {content: "`<span style="color: red"><b>tile-141</b></span>"`}`
-
-  or
-
-  `:root {`<span style="color: red"><b>--tile-123</b></span>`-accent: #ffcc00 }`
-  `:root {`<span style="color: red"><b>--tile-141</b></span>`-accent: #ffcc00 }`
-
-  <br>
-
-- ❌ CSS Comments
-
-  Avoid using comments with "tile-xx" references.  While tile references within comments are unlikely to create rule conflicts, they may trigger orphan warnings or interfere with id number assignments when copying or merging.  Depending on where comments are located, they may or may not be duplicated or removed with the tile they reference.
-
-  - Comments within rule bodies:
+  - Comments outside of rule blocks such as standalone statements or as selector "preludes" are never copied or removed as they are neither a selector or rule.  However, they could still lead to unresolvable orphan warnings and interfere with new tile id generation.
     
-    `#tile-123 {`
-    `  /* styles for tile-123 */`
-    `  font-size: 20px;`
-    `}`<br>
-    
-    When rules are duplicated, only the selector is changed to reflect the new tile's assigned id.  In this example, the comment in the rule body copied from "tile-123" to "tile-141", remains unchanged.
-    
-    `#tile-141 {`
-    `  /* styles for tile-123 */`
-    `  font-size: 20px;`
-    `}`<br>
-    
-    The comment might be technically correct, as "tile-141" is simply a copy of "tile-123".  However, if "tile-123" were deleted, a reference to "tile-123" would remain in the comment for "tile-141".  Depending on how the comment appeared in the CSS, This would cause unresolvable orphaned CSS warnings and could also interfere with new ID assignment for later copy or merge operations.
-
-  <br>
-
-  - Comments that outside of rule blocks such as standalone statements or as selector "preludes":
-    
-    `/* styles for tile-123 */`
+    `/* styles for `<span style="color: red"><b>tile-123</b></span>` */`
     `#tile-123 { font-size: 20px; }`<br>
     or<br>
-    `#tile-141 { font-size: 20px; }  /* comment not duplicated */`
-    
-    The comment will not be copied or removed with the rule for "tile-123"  If "tile-123" were removed, the rule would be removed but the comment would remain.
-
+    `#tile-141 { font-size: 20px; }  /* styles for `<span style="color: red"><b>tile-123</b></span>` */`
+  
   <br>
 
 <div style="page-break-after: always"></div>
- 
+
 <a id="markdown-usage-examples" name="usage-examples"></a>
 
 ## Usage Examples:
