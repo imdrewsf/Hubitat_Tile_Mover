@@ -1310,16 +1310,16 @@ def main(argv: Optional[List[str]] = None) -> None:
         from_id = int(from_id)
         to_id = int(to_id)
         if from_id == to_id:
-            die(f"--copy_tile_css:{copy_mode} requires different FROM_TILE and TO_TILE ids.")
+            die(f"--copy_css:{copy_mode} requires different FROM_TILE and TO_TILE ids.")
 
         if css_key is None:
-            die(f"--copy_tile_css:{copy_mode} requires a JSON object input that can contain customCSS (full/minimal).")
+            die(f"--copy_css:{copy_mode} requires a JSON object input that can contain customCSS (full/minimal).")
 
         existing_ids = {as_int(t, 'id') for t in tiles if t.get('id') is not None}
         if from_id not in existing_ids:
-            die(f"--copy_tile_css:{copy_mode}: source tile id {from_id} not found in layout.")
+            die(f"--copy_css:{copy_mode}: source tile id {from_id} not found in layout.")
         if to_id not in existing_ids:
-            die(f"--copy_tile_css:{copy_mode}: destination tile id {to_id} not found in layout.")
+            die(f"--copy_css:{copy_mode}: destination tile id {to_id} not found in layout.")
 
         css_text = css_text or ""
 
@@ -1328,7 +1328,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         frag = generate_css_for_id_map(css_text, {from_id: to_id}, dest_css=None)
         if not frag.strip():
             if not args.quiet:
-                wlog(f"--copy_tile_css:{copy_mode}: no tile-specific CSS rules found for tile-{from_id}; no changes.")
+                wlog(f"--copy_css:{copy_mode}: no tile-specific CSS rules found for tile-{from_id}; no changes.")
         else:
             if copy_mode == 'replace':
                 css_text2 = cleanup_css_for_tile_ids(css_text, [to_id])
@@ -1377,8 +1377,8 @@ def main(argv: Optional[List[str]] = None) -> None:
 
                     if not sys.stdin.isatty():
                         die(
-                            "Conflicting CSS rule(s) detected for --copy_tile_css:merge, but no TTY is available. "
-                            "Re-run with --force (to skip conflicting rules) or use --copy_tile_css:overwrite / :add / :replace."
+                            "Conflicting CSS rule(s) detected for --copy_css:merge, but no TTY is available. "
+                            "Re-run with --force (to skip conflicting rules) or use --copy_css:overwrite / :add / :replace."
                         )
 
                     stack, sel = key
@@ -1397,7 +1397,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 frag2, kept_blocks = drop_selector_items_by_keys(frag, keys_to_drop)
                 if kept_blocks == 0:
                     if not args.quiet:
-                        ilog(f"--copy_tile_css:{copy_mode}: no changes (all rules already present or conflicts skipped).")
+                        ilog(f"--copy_css:{copy_mode}: no changes (all rules already present or conflicts skipped).")
                 else:
                     css_text2 = css_text
                     if keys_to_remove:
@@ -1412,10 +1412,10 @@ def main(argv: Optional[List[str]] = None) -> None:
 
         tid = int(getattr(args, 'clear_tile_css'))
         if css_key is None:
-            die("--clear_tile_css requires a JSON object input that can contain customCSS (full/minimal).")
+            die("--clear_css requires a JSON object input that can contain customCSS (full/minimal).")
         existing_ids = {as_int(t, 'id') for t in tiles if t.get('id') is not None}
         if tid not in existing_ids:
-            die(f"--clear_tile_css: tile id {tid} not found in layout.")
+            die(f"--clear_css: tile id {tid} not found in layout.")
 
         css_text = css_text or ""
         css_text2 = cleanup_css_for_tile_ids(css_text, [tid])
@@ -1443,7 +1443,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             set_custom_css(obj, css_key, css_text)
         else:
             if not args.quiet:
-                ilog(f"--clear_tile_css: no selector rules found for tile-{tid}; no changes.")
+                ilog(f"--clear_css: no selector rules found for tile-{tid}; no changes.")
 
     if args.cleanup_css and css_key is not None and css_text and (deleted_ids or cleared_ids):
         from .util import format_id_sample, prompt_yes_no_or_die
