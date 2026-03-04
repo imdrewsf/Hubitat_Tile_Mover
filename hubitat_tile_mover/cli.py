@@ -15,13 +15,13 @@ Input JSON shapes:
 Import (one; default is clipboard):
   --import:clipboard
   --import:file <filename>
-  --import:hub                      (requires --url <dashboard_url>)
+  --import:hub <dashboard_url>
 
 Output destinations (repeatable; default is clipboard if none specified):
   --output:terminal
   --output:clipboard
   --output:file <filename>
-  --output:hub                      (requires --url; FULL input only)
+  --output:hub [dashboard_url]       (FULL input only; URL optional if importing from hub)
 
 Output format (optional; default matches input; cannot exceed input):
   --output_format:full | minimal | bare
@@ -32,26 +32,26 @@ JSON formatting:
   --newline keep|lf|crlf
 
 Layout actions (at most ONE per run):
-  Insert:  --insert_rows COUNT AT_ROW
-           --insert_cols COUNT AT_COL
-  Move:    --move_cols START END DEST
-           --move_rows START END DEST
-           --move_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-  Copy:    --copy_cols START END DEST
-           --copy_rows START END DEST
-           --copy_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-  Merge:   --merge_cols START END DEST
-           --merge_rows START END DEST
-           --merge_range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-           --merge_source <filename> OR --merge_url <dashboard_url>
-  Delete:  --delete_rows START END
-           --delete_cols START END
-  Clear:   --clear_rows START END
-           --clear_cols START END
-           --clear_range TOP LEFT BOTTOM RIGHT
-  Crop:    --crop_to_rows START END
-           --crop_to_cols START END
-           --crop_to_range TOP LEFT BOTTOM RIGHT
+  Insert:  --insert:rows COUNT AT_ROW
+           --insert:cols COUNT AT_COL
+  Move:    --move:cols START END DEST
+           --move:rows START END DEST
+           --move:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+  Copy:    --copy:cols START END DEST
+           --copy:rows START END DEST
+           --copy:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+  Merge:   --merge:cols START END DEST
+           --merge:rows START END DEST
+           --merge:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+           --merge_source:file <filename> OR --merge_source:url <dashboard_url>
+  Delete:  --delete:rows START END
+           --delete:cols START END
+  Clear:   --clear:rows START END
+           --clear:cols START END
+           --clear:range TOP LEFT BOTTOM RIGHT
+  Crop:    --crop:rows START END
+           --crop:cols START END
+           --crop:range TOP LEFT BOTTOM RIGHT
   Prune:   --prune_except_ids <spec>
            --prune_except_devices <spec>
            --prune_ids <spec>
@@ -79,7 +79,6 @@ Modifiers:
   --ignore_css                      (do not copy/create CSS for copy/merge)
 
 Hubitat direct mode:
-  --url <dashboard_url>
   --undo_last
   --confirm_keep
   --lock_backup
@@ -103,13 +102,13 @@ Accepted input JSON shapes (3 levels):
 Import (input) (only one; default is clipboard):
   --import:clipboard
   --import:file <filename>
-  --import:hub  (requires --url <dashboard local url)
+  --import:hub <dashboard_url>
 
 Output destinations (repeatable; default is clipboard if none specified):
   --output:terminal
   --output:clipboard
   --output:file <filename>
-  --output:hub (requires --url <dashboard local url)
+  --output:hub [dashboard_url] (URL optional if importing from hub)
 
 Output format (single choice; default matches the input level; cannot exceed input):
   --output_format:full       (Full dashboard JSON)
@@ -128,48 +127,49 @@ LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
   MOVE EXISTING TILES
 
     Insert empty rows / columns:
-      --insert_rows COUNT AT_ROW
-      --insert_cols COUNT AT_COL
+      --insert:rows COUNT AT_ROW
+      --insert:cols COUNT AT_COL
       Modifiers: --include_overlap, --col_range/--row_range
 
     Move tiles:
-      --move_cols START_COL END_COL DEST_START_COL
-      --move_rows START_ROW END_ROW DEST_START_ROW
-      --move_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+      --move:cols START_COL END_COL DEST_START_COL
+      --move:rows START_ROW END_ROW DEST_START_ROW
+      --move:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
       Modifiers: --include_overlap, --allow_overlap, --skip_overlap
 
   ADD TILES
 
     Copy / duplicate existing tiles (within the input layout):
-      --copy_cols START_COL END_COL DEST_START_COL
-      --copy_rows START_ROW END_ROW DEST_START_ROW
-      --copy_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+      --copy:cols START_COL END_COL DEST_START_COL
+      --copy:rows START_ROW END_ROW DEST_START_ROW
+      --copy:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
       Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
 
     Merge / import tiles from another layout:
-      --merge_source <filename>
-      --merge_cols START_COL END_COL DEST_START_COL
-      --merge_rows START_ROW END_ROW DEST_START_ROW
-      --merge_range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+      --merge_source:file <filename>
+      --merge_source:url <dashboard_url>
+      --merge:cols START_COL END_COL DEST_START_COL
+      --merge:rows START_ROW END_ROW DEST_START_ROW
+      --merge:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
       Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
 
   REMOVE TILES
 
     Delete rows / columns (removes tiles AND shifts following tiles up/left):
-      --delete_rows START_ROW END_ROW
-      --delete_cols START_COL END_COL
+      --delete:rows START_ROW END_ROW
+      --delete:cols START_COL END_COL
       Modifiers: --include_overlap, --row_range/--col_range, --cleanup_css, --force
 
     Clear tiles (removes tiles but does NOT shift anything):
-      --clear_rows START_ROW END_ROW
-      --clear_cols START_COL END_COL
-      --clear_range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
+      --clear:rows START_ROW END_ROW
+      --clear:cols START_COL END_COL
+      --clear:range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
       Modifiers: --include_overlap, --cleanup_css, --force
 
     Crop (remove everything OUTSIDE the kept range):
-      --crop_to_rows START_ROW END_ROW
-      --crop_to_cols START_COL END_COL
-      --crop_to_range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
+      --crop:rows START_ROW END_ROW
+      --crop:cols START_COL END_COL
+      --crop:range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
       Modifiers: --include_overlap, --cleanup_css, --force
       Notes: the kept range must contain at least one tile; at least one tile must remain.
 
@@ -243,9 +243,9 @@ MODIFIERS
       (span uses rowSpan/colSpan; missing span defaults to 1x1).
 
   Insert/Delete range filters (limit which tiles are affected):
-    --col_range <start_col> <end_col>     (only with --insert_rows and --delete_rows)
-    --row_range <start_row> <end_row>     (only with --insert_cols and --delete_cols)
-      example: --insert_rows 5 10 --col_range 2 7 ==> insert 5 rows at row 10 only in columns 2-7
+    --col_range <start_col> <end_col>     (only with --insert:rows and --delete:rows)
+    --row_range <start_row> <end_row>     (only with --insert:cols and --delete:cols)
+      example: --insert:rows 5 10 --col_range 2 7 ==> insert 5 rows at row 10 only in columns 2-7
 
 
   Destination conflict policy (move/copy/merge only):
@@ -320,6 +320,49 @@ class HelpFullAction(argparse.Action):
         print(FULL_HELP)
         raise SystemExit(0)
 
+
+class _SetImportSpecAction(argparse.Action):
+    """Normalize the visible --import:* flags into the same structure used by --import."""
+    def __init__(self, option_strings, dest, kind: str, **kwargs):
+        self._kind = kind
+        super().__init__(option_strings, dest, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if self._kind in ("clipboard", "hub"):
+            if self._kind == "clipboard":
+                setattr(namespace, self.dest, ["clipboard"])
+            else:
+                # values is a single URL string
+                setattr(namespace, self.dest, ["hub", values])
+        elif self._kind == "file":
+            setattr(namespace, self.dest, ["file", values])
+        else:
+            setattr(namespace, self.dest, None)
+
+
+class _AppendOutputToAction(argparse.Action):
+    """Normalize visible --output:* flags into the same structure used by --output_to."""
+    def __init__(self, option_strings, dest, kind: str, **kwargs):
+        self._kind = kind
+        super().__init__(option_strings, dest, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        cur = getattr(namespace, self.dest, None)
+        if cur is None:
+            cur = []
+        if self._kind in ("terminal", "clipboard"):
+            cur.append([self._kind])
+        elif self._kind == "file":
+            cur.append(["file", values])
+        elif self._kind == "hub":
+            if values is None:
+                cur.append(["hub"])
+            else:
+                cur.append(["hub", values])
+        else:
+            cur.append([self._kind])
+        setattr(namespace, self.dest, cur)
+
 def build_parser() -> argparse.ArgumentParser:
     p = TileSorterArgumentParser(
         add_help=True,
@@ -341,18 +384,15 @@ def build_parser() -> argparse.ArgumentParser:
     io_grp = p.add_argument_group("Import / Output")
     # User-facing convenience switches (these appear in -h via SHORT_HELP / FULL_HELP)
     imp_vis = io_grp.add_mutually_exclusive_group(required=False)
-    imp_vis.add_argument('--import:clipboard', dest='import_spec', action='store_const', const=('clipboard', None), help='Read JSON from clipboard (default).')
-    imp_vis.add_argument('--import:file', dest='import_spec', nargs=1, metavar='FILENAME', help='Read JSON from file.')
-    imp_vis.add_argument('--import:hub', dest='import_spec', action='store_const', const=('hub', None), help='Read layout JSON from Hubitat (requires --url).')
+    imp_vis.add_argument('--import:clipboard', dest='import_spec', nargs=0, action=_SetImportSpecAction, kind='clipboard', help='Read JSON from clipboard (default).')
+    imp_vis.add_argument('--import:file', dest='import_spec', action=_SetImportSpecAction, kind='file', metavar='FILENAME', help='Read JSON from file.')
+    imp_vis.add_argument('--import:hub', dest='import_spec', action=_SetImportSpecAction, kind='hub', metavar='DASHBOARD_URL', help='Read layout JSON from Hubitat dashboard URL.')
 
     out_vis = io_grp.add_argument_group('Output destinations')
-    out_vis.add_argument('--output:terminal', dest='output_to', action='append_const', const=('terminal', None), help='Write JSON to terminal. Repeatable.')
-    out_vis.add_argument('--output:clipboard', dest='output_to', action='append_const', const=('clipboard', None), help='Write JSON to clipboard. Repeatable.')
-    out_vis.add_argument('--output:file', dest='output_to', action='append', nargs=1, metavar='FILENAME', help='Write JSON to file. Repeatable.')
-    out_vis.add_argument('--output:hub', dest='output_to', action='append_const', const=('hub', None), help='POST resulting FULL layout JSON back to Hubitat (requires --url).')
-
-    io_grp.add_argument("--url", dest="url", metavar="DASHBOARD_URL", type=str, default=None, help="Local Hubitat dashboard URL (required for --import:hub and/or --output:hub).")
-    io_grp.add_argument("--merge_url", "--merge-url", dest="merge_url", metavar="DASHBOARD_URL", type=str, default=None, help="Read tiles from another Hubitat dashboard URL for merge_* operations.")
+    out_vis.add_argument('--output:terminal', dest='output_to', nargs=0, action=_AppendOutputToAction, kind='terminal', help='Write JSON to terminal. Repeatable.')
+    out_vis.add_argument('--output:clipboard', dest='output_to', nargs=0, action=_AppendOutputToAction, kind='clipboard', help='Write JSON to clipboard. Repeatable.')
+    out_vis.add_argument('--output:file', dest='output_to', action=_AppendOutputToAction, kind='file', metavar='FILENAME', help='Write JSON to file. Repeatable.')
+    out_vis.add_argument('--output:hub', dest='output_to', nargs='?', action=_AppendOutputToAction, kind='hub', metavar='DASHBOARD_URL', help='POST resulting FULL layout JSON back to Hubitat dashboard URL (URL optional if importing from hub).')
     io_grp.add_argument("--undo_last", dest="undo_last", action="store_true", help="Restore from the last backup (writes to requested outputs).")
     io_grp.add_argument("--confirm_keep", dest="confirm_keep", action="store_true", help="After writing changed output(s), prompt to keep; if not, restore backup to the same outputs.")
     io_grp.add_argument("--lock_backup", dest="lock_backup", action="store_true", help="Do not overwrite an existing backup; reuse it as the restore point.")
@@ -393,47 +433,47 @@ def build_parser() -> argparse.ArgumentParser:
     ops_grp = p.add_argument_group("Operations")
     ops = ops_grp.add_mutually_exclusive_group(required=False)
 
-    ops.add_argument("--insert_rows", "--insert-rows", nargs=2, metavar=("COUNT", "AT_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--insert_cols", "--insert-cols", "--insert_columns", "--insert-columns",
+    ops.add_argument("--insert:rows", "--insert_rows", "--insert-rows", nargs=2, metavar=("COUNT", "AT_ROW"), type=int, help="(see --help_full for details)")
+    ops.add_argument("--insert:cols", "--insert_cols", "--insert-cols", "--insert_columns", "--insert-columns",
                      nargs=2, metavar=("COUNT", "AT_COL"), type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--move_cols", "--move-cols", "--move_columns", "--move-columns",
+    ops.add_argument("--move:cols", "--move_cols", "--move-cols", "--move_columns", "--move-columns",
                      nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--move_rows", "--move-rows",
+    ops.add_argument("--move:rows", "--move_rows", "--move-rows",
                      nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--move_range", "--move-range",
+    ops.add_argument("--move:range", "--move_range", "--move-range",
                      nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
                      type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--copy_cols", "--copy-cols",
+    ops.add_argument("--copy:cols", "--copy_cols", "--copy-cols",
                      nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--copy_rows", "--copy-rows",
+    ops.add_argument("--copy:rows", "--copy_rows", "--copy-rows",
                      nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--copy_range", "--copy-range",
+    ops.add_argument("--copy:range", "--copy_range", "--copy-range",
                      nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
                      type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--merge_cols", "--merge-cols",
+    ops.add_argument("--merge:cols", "--merge_cols", "--merge-cols",
                      nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--merge_rows", "--merge-rows",
+    ops.add_argument("--merge:rows", "--merge_rows", "--merge-rows",
                      nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--merge_range", "--merge-range",
+    ops.add_argument("--merge:range", "--merge_range", "--merge-range",
                      nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
                      type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--delete_rows", "--delete-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--delete_cols", "--delete-cols", "--delete_columns", "--delete-columns",
+    ops.add_argument("--delete:rows", "--delete_rows", "--delete-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
+    ops.add_argument("--delete:cols", "--delete_cols", "--delete-cols", "--delete_columns", "--delete-columns",
                      nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--clear_rows", "--clear-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--clear_cols", "--clear-cols", "--clear_columns", "--clear-columns",
+    ops.add_argument("--clear:rows", "--clear_rows", "--clear-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
+    ops.add_argument("--clear:cols", "--clear_cols", "--clear-cols", "--clear_columns", "--clear-columns",
                      nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--clear_range", "--clear-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
+    ops.add_argument("--clear:range", "--clear_range", "--clear-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
 
-    ops.add_argument("--crop_to_rows", "--crop-to-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--crop_to_cols", "--crop-to-cols", "--crop_to_columns", "--crop-to-columns",
+    ops.add_argument("--crop:rows", "--crop_to_rows", "--crop-to-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
+    ops.add_argument("--crop:cols", "--crop_to_cols", "--crop-to-cols", "--crop_to_columns", "--crop-to-columns",
                      nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--crop_to_range", "--crop-to-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
+    ops.add_argument("--crop:range", "--crop_to_range", "--crop-to-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
 
     ops.add_argument("--prune_except_ids", "--prune-except-ids", metavar="SPEC", type=str, help="(see --help_full for details)")
     ops.add_argument("--prune_except_devices", "--prune-except-devices", metavar="SPEC", type=str, help="(see --help_full for details)")
@@ -487,7 +527,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
 
-    ops_grp.add_argument("--merge_source", "--merge-source", default=None, help="(see --help_full for details)")
+    ops_grp.add_argument("--merge_source", "--merge-source", default=None, nargs='+', help="(see --help_full for details)")
 
     filters_grp = p.add_argument_group("Filters")
     filters_grp.add_argument("--include_overlap", "--include-overlap", action="store_true", help="(see --help_full for details)")

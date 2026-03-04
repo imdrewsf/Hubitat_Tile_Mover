@@ -27,7 +27,7 @@ def _read_url_text(url: str, *, timeout: int = 20) -> str:
 def _build_layout_url(dashboard_url: str, request_token: str) -> str:
     u = urllib.parse.urlparse(dashboard_url)
     if not u.scheme or not u.netloc or not u.path:
-        die("URL does not look valid. Use --url with a local dashboard URL.")
+        die("URL does not look valid. Provide a local dashboard URL.")
     host = u.hostname or ""
     if not host:
         die("URL does not look valid (missing host).")
@@ -47,7 +47,7 @@ def fetch_request_token(dashboard_url: str, *, verbose: bool = False, debug: boo
     if not m:
         if debug or verbose:
             dlog(debug, f"dashboard html (first 400 chars): {html[:400]}")
-        die("Could not find requestToken in the dashboard HTML. Make sure --url is a local dashboard URL.")
+        die("Could not find requestToken in the dashboard HTML. Make sure the URL is a local dashboard URL.")
     token = m.group(1).strip()
     if not token:
         die("requestToken was found but empty.")

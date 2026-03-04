@@ -475,6 +475,17 @@ def main(argv: Optional[List[str]] = None) -> None:
     import_kind, import_path = parse_import_spec(args.import_spec)
     outputs = parse_output_to_specs(args.output_to)
 
+    # Resolve hub URLs:
+    # - import_path is the dashboard URL when import_kind == 'hub'
+    # - output entries may include ('hub', None) or ('hub', url)
+    #   If omitted, inherit from hub import URL when available.
+    if any(k == 'hub' and p is None for (k, p) in outputs):
+        if import_kind == 'hub' and import_path:
+            outputs = [(k, (import_path if (k == 'hub' and p is None) else p)) for (k, p) in outputs]
+
+    if any(k == 'hub' and p is None for (k, p) in outputs):
+        die("--output:hub requires a dashboard URL unless importing from hub with --import:hub <dashboard_url>.")
+
     show_map = bool(getattr(args, 'show_map', False))
     map_focus = getattr(args, 'map_focus', 'full')
     no_scale = (map_focus == 'no_scale')
@@ -516,9 +527,16 @@ def main(argv: Optional[List[str]] = None) -> None:
         obj = st.get("backup_obj")
         if obj is None:
             backup_path = st.get("backup_path")
-            if (not backup_path or not os.path.exists(backup_path)) and args.url:
-                # If the user specified a URL, try the derived per-dashboard backup path.
-                cand = _backup_path_for_url(args.url)
+            # If the user specified a hub output URL this run, try the derived per-dashboard backup path.
+            out_url = None
+            if args.output_to:
+                outs_tmp = parse_output_to_specs(args.output_to)
+                for k, p in outs_tmp:
+                    if k == 'hub' and p:
+                        out_url = p
+                        break
+            if (not backup_path or not os.path.exists(backup_path)) and out_url:
+                cand = _backup_path_for_url(out_url)
                 if os.path.exists(cand):
                     backup_path = cand
             if not backup_path or not os.path.exists(backup_path):
@@ -530,10 +548,17 @@ def main(argv: Optional[List[str]] = None) -> None:
 
         # Default outputs to last outputs, unless user provided outputs this run
         outputs = parse_output_to_specs(args.output_to) if args.output_to else st.get("last_outputs", [("clipboard", None)])
-        url = args.url or st.get("last_url")
+        # Resolve dashboard URL for hub undo: prefer explicit hub output URL, else last_url.
+        url = None
+        for k, p in outputs:
+            if k == 'hub' and p:
+                url = p
+                break
+        if url is None:
+            url = st.get("last_url")
         using_hub_output = any((k == "hub") for (k, _) in outputs)
         if using_hub_output and not url:
-            die("Undo restore requires --url (or a prior hub run with stored URL) when outputting to hub.")
+            die("Undo restore requires a dashboard URL (either --output:hub <dashboard_url> or a prior hub run with stored URL).")
 
         # Output format: for hub output force FULL; otherwise default to kind unless user explicitly requested.
         output_format = args.output_format or st.get("last_output_format") or kind_to_default_output_format(kind)
@@ -639,9 +664,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     # Load input JSON (file/clipboard/hub)
     hub_ctx = None
     if using_hub_import:
-        if not args.url:
-            die("--import:hub requires --url. Use -h for help.")
-        hub_ctx, obj = hub_import_layout(args.url, verbose=args.verbose, debug=args.debug)
+        if not import_path:
+            die("--import:hub requires a dashboard URL. Use -h for help.")
+        hub_ctx, obj = hub_import_layout(import_path, verbose=args.verbose, debug=args.debug)
     else:
         from .io_helpers import read_input_text
         from .jsonio import load_json_from_text
@@ -660,9 +685,13 @@ def main(argv: Optional[List[str]] = None) -> None:
     cleared_ids: list[int] = []
     created_id_map: dict[int, int] = {}
     merge_css_source_path: str = ""
-    merge_source_path: str = args.merge_source or ""
-    if (args.merge_cols or args.merge_rows or args.merge_range) and args.merge_url:
-        _, mobj = hub_import_layout(args.merge_url, verbose=args.verbose, debug=args.debug)
+    merge_source_path: str = ""
+    from .io_helpers import parse_merge_source_spec
+    merge_source_kind, merge_source_arg = parse_merge_source_spec(args.merge_source)
+    if merge_source_kind == "file" and merge_source_arg:
+        merge_source_path = merge_source_arg
+    elif merge_source_kind == "url" and merge_source_arg:
+        _, mobj = hub_import_layout(merge_source_arg, verbose=args.verbose, debug=args.debug)
         merge_source_path = _write_temp_merge_source(mobj)
         merge_css_source_path = merge_source_path
 
@@ -727,8 +756,18 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Validate merge usage
     if (args.merge_cols or args.merge_rows or args.merge_range):
-        if bool(args.merge_source) == bool(args.merge_url):
-            die("For merge operations, specify exactly one of --merge_source <filename> or --merge_url <dashboard_url>.")
+        if not merge_source_kind or not merge_source_arg:
+            die("For merge operations, --merge_source is required (use --merge_source:file <filename> or --merge_source:url <dashboard_url>).")
+        # merge_source cannot be the same as the input
+        if using_hub_import and merge_source_kind == 'url' and import_path and (import_path == merge_source_arg):
+            die("--merge_source cannot refer to the same dashboard URL as the hub import.")
+        if (import_kind == 'file') and merge_source_kind == 'file' and import_path:
+            try:
+                import os
+                if os.path.abspath(import_path) == os.path.abspath(merge_source_arg):
+                    die("--merge_source cannot refer to the same file as the file import.")
+            except Exception:
+                pass
     col_range = _parse_inclusive_range("--col_range", args.col_range)
     row_range = _parse_inclusive_range("--row_range", args.row_range)
 
@@ -752,19 +791,28 @@ def main(argv: Optional[List[str]] = None) -> None:
             vlog(True, f"Sort: enabled spec='{spec}' effective='{eff}'")
         else:
             vlog(True, "Sort: disabled")
-        if args.merge_source:
-            vlog(True, f"Merge source: {args.merge_source}")
-        if getattr(args, 'merge_url', None):
-            vlog(True, f"Merge URL: {args.merge_url}")
+        if merge_source_kind and merge_source_arg:
+            vlog(True, f"Merge source: {merge_source_kind}:{merge_source_arg}")
         vlog(True, f"Debug per-tile: {bool(args.debug)}")
         vlog(True, "====================================")
+
+    # Determine primary hub URL for backup bookkeeping (hub import URL or first hub output URL)
+    hub_url_for_backup = None
+    if using_hub_import and import_path:
+        hub_url_for_backup = import_path
+    else:
+        for k, p in outputs:
+            if k == 'hub' and p:
+                hub_url_for_backup = p
+                break
+
     backup_path = None
     backup_obj = None
     backup_tmp_path = None
     # Backup is required for hub output and for --confirm_keep (and for hub import, as a restore point).
     # In standalone map view mode, do not create/overwrite backups.
-    if (not view_only) and args.url and (using_hub_import or using_hub_output or args.confirm_keep) and (not args.undo_last):
-        backup_path = _backup_path_for_url(args.url)
+    if (not view_only) and hub_url_for_backup and (using_hub_import or using_hub_output or args.confirm_keep) and (not args.undo_last):
+        backup_path = _backup_path_for_url(hub_url_for_backup)
         if args.lock_backup and os.path.exists(backup_path):
             # Use existing backup as the restore point and do not overwrite it.
             backup_obj = _read_backup(backup_path)
@@ -786,7 +834,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     # Tile list validation
     # Some actions (merge, scrub_css) can run even when the dashboard has no tiles yet.
     has_tiles = bool(tiles_any)
-    merge_like = bool(args.merge_source or args.merge_url) and bool(args.merge_cols or args.merge_rows or args.merge_range)
+    merge_like = bool(merge_source_kind) and bool(args.merge_cols or args.merge_rows or args.merge_range)
     scrub_like = bool(args.scrub_css)
     compact_like = bool(args.compact_css)
 
@@ -1603,9 +1651,21 @@ def main(argv: Optional[List[str]] = None) -> None:
     posted = False
     post_url_used = ''
     if using_hub_output:
-        if hub_ctx is None:
-            hub_ctx, _tmp = hub_import_layout(args.url, verbose=False, debug=False)
-        post_url_used = hub_post_layout_with_refresh(args.url, hub_ctx.layout_url, output_obj, verbose=args.verbose, debug=args.debug)
+        # Determine hub output URL (required).
+        hub_out_url = None
+        for k, p in outputs:
+            if k == 'hub':
+                hub_out_url = p
+                break
+        if not hub_out_url:
+            die("--output:hub requires a dashboard URL (or import from hub with --import:hub <dashboard_url>).")
+
+        # Use the import hub context only if it matches the output URL; otherwise fetch a new context.
+        hub_ctx_out = hub_ctx if (hub_ctx is not None and using_hub_import and import_path and import_path == hub_out_url) else None
+        if hub_ctx_out is None:
+            hub_ctx_out, _tmp = hub_import_layout(hub_out_url, verbose=False, debug=False)
+
+        post_url_used = hub_post_layout_with_refresh(hub_out_url, hub_ctx_out.layout_url, output_obj, verbose=args.verbose, debug=args.debug)
         posted = True
 
     # Optional: write changes first, then prompt to keep; if not kept, restore the backup to the same outputs.
@@ -1638,8 +1698,18 @@ def main(argv: Optional[List[str]] = None) -> None:
 
             # Restore hub output (posts backup layout back to dashboard).
             if using_hub_output:
+                hub_out_url = None
+                for k, p in outputs:
+                    if k == 'hub':
+                        hub_out_url = p
+                        break
+                if not hub_out_url:
+                    die("--output:hub requires a dashboard URL (or import from hub with --import:hub <dashboard_url>).")
+                hub_ctx_out = hub_ctx if (hub_ctx is not None and using_hub_import and import_path and import_path == hub_out_url) else None
+                if hub_ctx_out is None:
+                    hub_ctx_out, _tmp = hub_import_layout(hub_out_url, verbose=False, debug=False)
                 post_url_used = hub_post_layout_with_refresh(
-                    args.url, hub_ctx.layout_url, restore_output_obj, verbose=args.verbose, debug=args.debug
+                    hub_out_url, hub_ctx_out.layout_url, restore_output_obj, verbose=args.verbose, debug=args.debug
                 )
                 posted = True
 
@@ -1673,17 +1743,17 @@ def main(argv: Optional[List[str]] = None) -> None:
             state = {
                 # Global last-run backup (works for file/clipboard/hub imports)
                 "backup_obj": original_obj,
-                # Optional per-dashboard backup path (only meaningful when args.url is provided)
+                # Optional per-dashboard backup path (only meaningful when a hub URL is in use)
                 "backup_path": backup_path,
                 "last_outputs": outputs,
-                "last_url": args.url,
+                "last_url": hub_url_for_backup,
                 "last_output_format": args.output_format,
                 "last_import_kind": import_kind,
                 "state_written_at_epoch": now_epoch,
                 "state_written_at": _dt.datetime.fromtimestamp(now_epoch).isoformat(sep=" ", timespec="seconds"),
             }
 
-            if posted and args.url:
+            if posted and hub_url_for_backup:
                 # Fingerprint the last layout saved to hub so --undo_last can detect external changes.
                 try:
                     state["last_hub_saved_hash"] = layout_fingerprint(output_obj)
