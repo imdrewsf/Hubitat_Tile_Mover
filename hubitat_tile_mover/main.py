@@ -486,8 +486,18 @@ def main(argv: Optional[List[str]] = None) -> None:
     if any(k == 'hub' and p is None for (k, p) in outputs):
         die("--output:hub requires a dashboard URL unless importing from hub with --import:hub <dashboard_url>.")
 
-    show_map = bool(getattr(args, 'show_map', False))
-    map_focus = getattr(args, 'map_focus', 'full')
+    # Map printing: prefer new --show_map[:MODE] interface.
+    show_map_mode = getattr(args, 'show_map_mode', None)
+    legacy_map_focus = getattr(args, 'map_focus', None)
+    map_focus = None
+    if show_map_mode:
+        map_focus = show_map_mode
+    elif legacy_map_focus:
+        # Back-compat only (undocumented)
+        map_focus = legacy_map_focus
+    show_map = bool(map_focus)
+    if map_focus is None:
+        map_focus = 'full'
     no_scale = (map_focus == 'no_scale')
 
     # --undo_last is a standalone restore action.
@@ -690,7 +700,10 @@ def main(argv: Optional[List[str]] = None) -> None:
     merge_source_kind, merge_source_arg = parse_merge_source_spec(args.merge_source)
     if merge_source_kind == "file" and merge_source_arg:
         merge_source_path = merge_source_arg
-    elif merge_source_kind == "url" and merge_source_arg:
+    elif merge_source_kind == "hub" and merge_source_arg:
+        # Merge from a Hubitat dashboard URL. Fetch the source layout JSON and
+        # write it to a temp file so the merge ops (and optional CSS handling)
+        # can reuse the same path-based loading flow.
         _, mobj = hub_import_layout(merge_source_arg, verbose=args.verbose, debug=args.debug)
         merge_source_path = _write_temp_merge_source(mobj)
         merge_css_source_path = merge_source_path
@@ -728,9 +741,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     )
 
     has_sort = bool((args.sort is not None) or (getattr(args, "order", None) is not None))
-    # Standalone map view mode: --show_map with no other actions.
+    # Standalone map view mode: --show_map (any mode) with no other actions.
     # This mode should only render the imported layout map and still check for orphan CSS.
-    view_only = bool(getattr(args, "show_map", False)) and not (has_movement or has_trim or args.scrub_css or args.compact_css or has_sort)
+    view_only = bool(show_map) and not (has_movement or has_trim or args.scrub_css or args.compact_css or has_sort)
 
     if not (has_movement or has_trim or args.scrub_css or args.compact_css or has_sort or view_only):
         die(
@@ -757,13 +770,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     # Validate merge usage
     if (args.merge_cols or args.merge_rows or args.merge_range):
         if not merge_source_kind or not merge_source_arg:
-            die("For merge operations, --merge_source is required (use --merge_source:file <filename> or --merge_source:url <dashboard_url>).")
+            die("For merge operations, --merge_source is required (use --merge_source:file <filename> or --merge_source:hub <dashboard_url>).")
         # merge_source cannot be the same as the input
-        if using_hub_import and merge_source_kind == 'url' and import_path and (import_path == merge_source_arg):
+        if using_hub_import and merge_source_kind == 'hub' and import_path and (import_path == merge_source_arg):
             die("--merge_source cannot refer to the same dashboard URL as the hub import.")
         if (import_kind == 'file') and merge_source_kind == 'file' and import_path:
             try:
-                import os
                 if os.path.abspath(import_path) == os.path.abspath(merge_source_arg):
                     die("--merge_source cannot refer to the same file as the file import.")
             except Exception:
@@ -840,7 +852,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     def _ga(name):
         return getattr(args, name, None)
-    show_map_only = bool(_ga('show_map')) and not any([
+    show_map_only = bool(show_map) and not any([
         _ga('sort'), _ga('sort_spec'), _ga('trim'),
         _ga('insert_rows'), _ga('insert_cols'),
         _ga('move_cols'), _ga('move_rows'), _ga('move_range'),
@@ -874,7 +886,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         if t.get("id") is not None
     }
     before_mark_rects = _compute_before_map_mark_rects(args, tiles_before_map, col_range=col_range, row_range=row_range, has_trim=has_trim)
-    if args.show_map:
+    if show_map:
         bounds_rects = before_mark_rects if (map_focus == 'conflict' and before_mark_rects) else None
         title = 'BEFORE MAP'
         if view_only:
@@ -989,7 +1001,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1005,7 +1017,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1024,7 +1036,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1041,7 +1053,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1058,7 +1070,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1078,7 +1090,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1096,7 +1108,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1116,7 +1128,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1139,7 +1151,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
-            show_map=args.show_map,
+            show_map=show_map,
             map_focus=map_focus,
             verbose=args.verbose,
             debug=args.debug,
@@ -1544,7 +1556,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                     return id1, id2, (or1, or2, oc1, oc2)
         return None
 
-    if args.show_map:
+    if show_map:
         conflict_rects: List[Tuple[int, int, int, int]] = []
         if changed_ids:
             changed_tiles = [t for t in final_tiles if as_int(t, "id") in changed_ids]
@@ -1622,7 +1634,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         ov = _first_overlap_changed_vs_unchanged(final_tiles)
         if ov is not None:
             id1, id2, orect = ov
-            if args.show_map:
+            if show_map:
                 print(
                     render_tile_map(
                         final_tiles,

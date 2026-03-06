@@ -13,7 +13,7 @@ def normalize_argv(argv: List[str]) -> List[str]:
       --import:file <path>
       --import:hub <dashboard_url>
       --merge_source:file <path>
-      --merge_source:url <dashboard_url>
+      --merge_source:hub <dashboard_url>
       --output_format:full|minimal|bare (legacy: container/list; also accepts legacy --output_shape:*)
       --output_to:terminal
       --output_to:file <path>
@@ -34,8 +34,7 @@ def normalize_argv(argv: List[str]) -> List[str]:
             out += ["--indent", a.split(":", 1)[1]]
         elif a.startswith("--trim:"):
             out += ["--trim", a.split(":", 1)[1]]
-        elif a.startswith("--map_focus:") or a.startswith("--map-focus:"):
-            out += ["--map_focus", a.split(":", 1)[1]]
+        # --show_map:* is handled directly by argparse (no normalization needed)
         elif a.startswith("--import:"):
             out += ["--import", a.split(":", 1)[1]]
         elif a.startswith("--merge_source:") or a.startswith("--merge-source:"):
@@ -83,15 +82,15 @@ def parse_merge_source_spec(spec: Optional[List[str]]) -> Tuple[str, Optional[st
 
     Supported:
       --merge_source:file <filename>
-      --merge_source:url <dashboard_url>
+      --merge_source:hub <dashboard_url>
     """
     if spec is None:
         return ("", None)
     if len(spec) == 2 and spec[0] == "file":
         return ("file", spec[1])
-    if len(spec) == 2 and spec[0] in ("url", "hub"):
-        return ("url", spec[1])
-    die("Invalid merge source. Use --merge_source:file <filename> OR --merge_source:url <dashboard_url>.")
+    if len(spec) == 2 and spec[0] in ("hub", "url"):
+        return ("hub", spec[1])
+    die("Invalid merge source. Use --merge_source:file <filename> OR --merge_source:hub <dashboard_url>.")
 
 
 def parse_output_to_specs(specs: Optional[List[List[str]]]) -> List[Tuple[str, Optional[str]]]:

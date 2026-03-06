@@ -5,12 +5,13 @@ import sys
 
 from . import __version__
 
-SHORT_HELP = r'''Adjust and/or edit the "tiles" list in a Hubitat Dashboard layout JSON while preserving everything else unchanged.
+# Short help formatting notes (0.9.98):
+# - Removed user-facing JSON formatting/shape details.
+# - Added blank lines between layout action groups for readability.
+# - Renamed "Tile CSS" -> "Copy CSS" and kept the header on the same line as the first option.
+# - Documented --trim default as top,left (and that left,top is also accepted).
 
-Input JSON shapes:
-  Full:    { ..., "tiles": [ {...}, ... ], ... }
-  Minimal: { "tiles": [ {...}, ... ] }
-  Bare:    [ {...}, ... ]
+SHORT_HELP = r'''Adjust and/or edit the "tiles" list in a Hubitat Dashboard layout JSON while preserving everything else unchanged.
 
 Import (one; default is clipboard):
   --import:clipboard
@@ -23,50 +24,47 @@ Output destinations (repeatable; default is clipboard if none specified):
   --output:file <filename>
   --output:hub [dashboard_url]       (FULL input only; URL optional if importing from hub)
 
-Output format (optional; default matches input; cannot exceed input):
-  --output_format:full | minimal | bare
-
-JSON formatting:
-  --indent N
-  --minify
-  --newline keep|lf|crlf
-
 Layout actions (at most ONE per run):
-  Insert:  --insert:rows COUNT AT_ROW
-           --insert:cols COUNT AT_COL
-  Move:    --move:cols START END DEST
-           --move:rows START END DEST
-           --move:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-  Copy:    --copy:cols START END DEST
-           --copy:rows START END DEST
-           --copy:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-  Merge:   --merge:cols START END DEST
-           --merge:rows START END DEST
-           --merge:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-           --merge_source:file <filename> OR --merge_source:url <dashboard_url>
-  Delete:  --delete:rows START END
-           --delete:cols START END
-  Clear:   --clear:rows START END
-           --clear:cols START END
-           --clear:range TOP LEFT BOTTOM RIGHT
-  Crop:    --crop:rows START END
-           --crop:cols START END
-           --crop:range TOP LEFT BOTTOM RIGHT
-  Prune:   --prune_except:ids <spec>
-           --prune_except:devices <spec>
-           --prune:ids <spec>
-           --prune:devices <spec>
-           --prune:ids <spec>
-           --prune:devices <spec>
-  Tile CSS:
-           --copy_css:merge FROM_TILE TO_TILE
-           --copy_css:overwrite FROM_TILE TO_TILE
-           --copy_css:replace FROM_TILE TO_TILE
-           --copy_css:add FROM_TILE TO_TILE
-           --clear_css TILE_ID
+  Insert:   --insert:rows COUNT AT_ROW
+            --insert:cols COUNT AT_COL
+
+  Move:     --move:cols START END DEST
+            --move:rows START END DEST
+            --move:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+
+  Copy:     --copy:cols START END DEST
+            --copy:rows START END DEST
+            --copy:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+
+  Merge:    --merge:cols START END DEST
+            --merge:rows START END DEST
+            --merge:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+            --merge_source:file <filename> OR  --merge_source:hub <dashboard_url>
+
+  Delete:   --delete:rows START END
+            --delete:cols START END
+
+  Clear:    --clear:rows START END
+            --clear:cols START END
+            --clear:range TOP LEFT BOTTOM RIGHT
+
+  Crop:     --crop:rows START END
+            --crop:cols START END
+            --crop:range TOP LEFT BOTTOM RIGHT
+
+  Prune:    --prune:ids <spec>
+            --prune:devices <spec>
+            --prune_except:ids <spec>
+            --prune_except:devices <spec>
+
+  Copy CSS: --copy_css:merge FROM_TILE TO_TILE
+            --copy_css:overwrite FROM_TILE TO_TILE
+            --copy_css:replace FROM_TILE TO_TILE
+            --copy_css:add FROM_TILE TO_TILE
+            --clear_css TILE_ID
 
 Additional actions (may be combined with the single layout action):
-  --trim[:top|left|top,left]        (runs after layout action, before sort)
+  --trim[:top|left|top,left]        (default: top,left; left,top accepted)
   --sort[:<keys>]                   (runs after trim; default keys are irc)
   --scrub_css                       (runs last; can run alone)
   --compact_css                     (runs last; can run alone)
@@ -86,8 +84,7 @@ Hubitat direct mode:
   --lock_backup
 
 Maps:
-  --show_map
-  --map_focus full|conflict|no_scale
+  --show_map[:full|:conflicts|:no_scale]
 
 More help:
   --help_full
@@ -95,11 +92,6 @@ More help:
 '''
 
 FULL_HELP = r"""hubitat_tile_mover � adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
-
-Accepted input JSON shapes (3 levels):
-  A) Full:    { ..., "tiles": [ {...}, ... ], ... }
-  B) Minimal: { "tiles": [ {...}, ... ] }
-  C) Bare:    [ {...}, ... ]
 
 Import (input) (only one; default is clipboard):
   --import:clipboard
@@ -111,11 +103,6 @@ Output destinations (repeatable; default is clipboard if none specified):
   --output:clipboard
   --output:file <filename>
   --output:hub [dashboard_url] (URL optional if importing from hub)
-
-Output format (single choice; default matches the input level; cannot exceed input):
-  --output_format:full       (Full dashboard JSON)
-  --output_format:minimal    ({"tiles":[...]}) (cannot be used with --output:hub)
-  --output_format:bare       ([...]) (cannot be used with --output:hub)
 
 Undo Actions (from output saved directly to hub)
   --undo_last (restores changes saved to hub by previous run)
@@ -149,7 +136,7 @@ LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
 
     Merge / import tiles from another layout:
       --merge_source:file <filename>
-      --merge_source:url <dashboard_url>
+      --merge_source:hub <dashboard_url>
       --merge:cols START_COL END_COL DEST_START_COL
       --merge:rows START_ROW END_ROW DEST_START_ROW
       --merge:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
@@ -193,7 +180,8 @@ ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
     --trim                 (same as --trim:top,left)
     --trim:top
     --trim:left
-    --trim:top,left
+    --trim:top,left        (default)
+    --trim:left,top        (also accepted)
 
   Sort (only applied if --sort is present; affects output order only):
     --sort                 (same as --sort:irc)
@@ -234,8 +222,10 @@ ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
       Rewrites customCSS as one selector rule per line (selector { body }), splits selector lists, and sorts lines.
       Sorting: non-tile class selectors (start with '.' but not .tile-N) first, then tile selectors (#tile-N/.tile-N) by N, then everything else.
   Layout Maps: (Show in terminal before and after layouts, movement conflicts)
-    --show_map                 (print BEFORE / OUTCOME maps)
-    --map_focus full|conflict|no_scale  (default: full; conflict maps only)
+    --show_map                 (same as --show_map:full)
+    --show_map:full            (print BEFORE / OUTCOME maps; default)
+    --show_map:conflicts       (focus maps on affected/conflicting region)
+    --show_map:no_scale        (no scaling; 1 row/col = 1 character)
     Note: Show map can be used without an action to display the current layout of the import dashboard.
 
 MODIFIERS
@@ -426,58 +416,227 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-shape",
         choices=["full", "minimal", "bare", "container", "list"],
         default=None,
-        help="(see --help_full for details)",
+        help=argparse.SUPPRESS,
     )
 
-    fmt_grp = p.add_argument_group("JSON Formatting")
-    fmt_grp.add_argument("--indent", type=int, default=2, help="(see --help_full for details)")
-    fmt_grp.add_argument("--minify", action="store_true", help="(see --help_full for details)")
-    fmt_grp.add_argument("--newline", choices=["keep", "lf", "crlf"], default="keep", help="(see --help_full for details)")
+    # JSON formatting knobs are intentionally supported for power users / internal use, but not documented.
+    # User-facing docs assume full Hubitat layout JSON and default formatting.
+    p.add_argument("--indent", type=int, default=2, help=argparse.SUPPRESS)
+    p.add_argument("--minify", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--newline", choices=["keep", "lf", "crlf"], default="keep", help=argparse.SUPPRESS)
 
     ops_grp = p.add_argument_group("Operations")
     ops = ops_grp.add_mutually_exclusive_group(required=False)
 
-    ops.add_argument("--insert:rows", "--insert_rows", "--insert-rows", nargs=2, metavar=("COUNT", "AT_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--insert:cols", "--insert_cols", "--insert-cols", "--insert_columns", "--insert-columns",
-                     nargs=2, metavar=("COUNT", "AT_COL"), type=int, help="(see --help_full for details)")
+    # IMPORTANT: argparse derives Namespace attribute names from the *first* option string.
+    # For colon-form options (e.g., --insert:rows), that would create attributes like "insert:rows",
+    # which then breaks code expecting insert_rows/move_cols/etc. Always set dest=... explicitly.
+    ops.add_argument(
+        "--insert:rows",
+        "--insert_rows",
+        "--insert-rows",
+        dest="insert_rows",
+        nargs=2,
+        metavar=("COUNT", "AT_ROW"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--insert:cols",
+        "--insert_cols",
+        "--insert-cols",
+        "--insert_columns",
+        "--insert-columns",
+        dest="insert_cols",
+        nargs=2,
+        metavar=("COUNT", "AT_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
 
-    ops.add_argument("--move:cols", "--move_cols", "--move-cols", "--move_columns", "--move-columns",
-                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--move:rows", "--move_rows", "--move-rows",
-                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--move:range", "--move_range", "--move-range",
-                     nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
-                     type=int, help="(see --help_full for details)")
+    ops.add_argument(
+        "--move:cols",
+        "--move_cols",
+        "--move-cols",
+        "--move_columns",
+        "--move-columns",
+        dest="move_cols",
+        nargs=3,
+        metavar=("START_COL", "END_COL", "DEST_START_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--move:rows",
+        "--move_rows",
+        "--move-rows",
+        dest="move_rows",
+        nargs=3,
+        metavar=("START_ROW", "END_ROW", "DEST_START_ROW"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--move:range",
+        "--move_range",
+        "--move-range",
+        dest="move_range",
+        nargs=6,
+        metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
 
-    ops.add_argument("--copy:cols", "--copy_cols", "--copy-cols",
-                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--copy:rows", "--copy_rows", "--copy-rows",
-                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--copy:range", "--copy_range", "--copy-range",
-                     nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
-                     type=int, help="(see --help_full for details)")
+    ops.add_argument(
+        "--copy:cols",
+        "--copy_cols",
+        "--copy-cols",
+        dest="copy_cols",
+        nargs=3,
+        metavar=("START_COL", "END_COL", "DEST_START_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--copy:rows",
+        "--copy_rows",
+        "--copy-rows",
+        dest="copy_rows",
+        nargs=3,
+        metavar=("START_ROW", "END_ROW", "DEST_START_ROW"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--copy:range",
+        "--copy_range",
+        "--copy-range",
+        dest="copy_range",
+        nargs=6,
+        metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
 
-    ops.add_argument("--merge:cols", "--merge_cols", "--merge-cols",
-                     nargs=3, metavar=("START_COL", "END_COL", "DEST_START_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--merge:rows", "--merge_rows", "--merge-rows",
-                     nargs=3, metavar=("START_ROW", "END_ROW", "DEST_START_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--merge:range", "--merge_range", "--merge-range",
-                     nargs=6, metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
-                     type=int, help="(see --help_full for details)")
+    ops.add_argument(
+        "--merge:cols",
+        "--merge_cols",
+        "--merge-cols",
+        dest="merge_cols",
+        nargs=3,
+        metavar=("START_COL", "END_COL", "DEST_START_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--merge:rows",
+        "--merge_rows",
+        "--merge-rows",
+        dest="merge_rows",
+        nargs=3,
+        metavar=("START_ROW", "END_ROW", "DEST_START_ROW"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--merge:range",
+        "--merge_range",
+        "--merge-range",
+        dest="merge_range",
+        nargs=6,
+        metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
 
-    ops.add_argument("--delete:rows", "--delete_rows", "--delete-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--delete:cols", "--delete_cols", "--delete-cols", "--delete_columns", "--delete-columns",
-                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
+    ops.add_argument(
+        "--delete:rows",
+        "--delete_rows",
+        "--delete-rows",
+        dest="delete_rows",
+        nargs=2,
+        metavar=("START_ROW", "END_ROW"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--delete:cols",
+        "--delete_cols",
+        "--delete-cols",
+        "--delete_columns",
+        "--delete-columns",
+        dest="delete_cols",
+        nargs=2,
+        metavar=("START_COL", "END_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
 
-    ops.add_argument("--clear:rows", "--clear_rows", "--clear-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--clear:cols", "--clear_cols", "--clear-cols", "--clear_columns", "--clear-columns",
-                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--clear:range", "--clear_range", "--clear-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
+    ops.add_argument(
+        "--clear:rows",
+        "--clear_rows",
+        "--clear-rows",
+        dest="clear_rows",
+        nargs=2,
+        metavar=("START_ROW", "END_ROW"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--clear:cols",
+        "--clear_cols",
+        "--clear-cols",
+        "--clear_columns",
+        "--clear-columns",
+        dest="clear_cols",
+        nargs=2,
+        metavar=("START_COL", "END_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--clear:range",
+        "--clear_range",
+        "--clear-range",
+        dest="clear_range",
+        nargs=4,
+        metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
 
-    ops.add_argument("--crop:rows", "--crop_to_rows", "--crop-to-rows", nargs=2, metavar=("START_ROW", "END_ROW"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--crop:cols", "--crop_to_cols", "--crop-to-cols", "--crop_to_columns", "--crop-to-columns",
-                     nargs=2, metavar=("START_COL", "END_COL"), type=int, help="(see --help_full for details)")
-    ops.add_argument("--crop:range", "--crop_to_range", "--crop-to-range", nargs=4, metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"), type=int, help="(see --help_full for details)")
+    ops.add_argument(
+        "--crop:rows",
+        "--crop_to_rows",
+        "--crop-to-rows",
+        dest="crop_to_rows",
+        nargs=2,
+        metavar=("START_ROW", "END_ROW"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--crop:cols",
+        "--crop_to_cols",
+        "--crop-to-cols",
+        "--crop_to_columns",
+        "--crop-to-columns",
+        dest="crop_to_cols",
+        nargs=2,
+        metavar=("START_COL", "END_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--crop:range",
+        "--crop_to_range",
+        "--crop-to-range",
+        dest="crop_to_range",
+        nargs=4,
+        metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"),
+        type=int,
+        help="(see --help_full for details)",
+    )
 
     # Prune specs (new preferred syntax)
     ops.add_argument("--prune_except:ids", dest="prune_except_ids", metavar="SPEC", type=str, help="(see --help_full for details)")
@@ -581,13 +740,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
     diag_grp = p.add_argument_group("Diagnostics")
-    diag_grp.add_argument("--show_map", dest="show_map", action="store_true", help="Show BEFORE/AFTER ASCII layout maps in the terminal")
+    # Map printing. The visible interface is --show_map:MODE with a default of full.
+    # Keep a hidden --map_focus for backwards compatibility but do not document it.
+    diag_grp.add_argument("--show_map", dest="show_map_mode", action="store_const", const="full", help="Show ASCII layout maps in the terminal (same as --show_map:full)")
+    diag_grp.add_argument("--show_map:full", dest="show_map_mode", action="store_const", const="full", help="Show BEFORE/AFTER ASCII layout maps in the terminal")
+    diag_grp.add_argument("--show_map:conflicts", dest="show_map_mode", action="store_const", const="conflict", help="Focus maps on affected/conflicting region")
+    diag_grp.add_argument("--show_map:no_scale", dest="show_map_mode", action="store_const", const="no_scale", help="Show maps unscaled (1 row/col = 1 character)")
+
     diag_grp.add_argument(
         "--map_focus",
         dest="map_focus",
         choices=["full", "conflict", "no_scale"],
-        default="full",
-        help="Map bounds focus for maps (full/conflict) and scaling mode (no_scale disables scaling; default: full)",
+        default=None,
+        help=argparse.SUPPRESS,
     )
     diag_grp.add_argument("--verbose", action="store_true", help="Verbose output to STDERR")
     diag_grp.add_argument("--debug", action="store_true", help="Debug output (very verbose) to STDERR")
