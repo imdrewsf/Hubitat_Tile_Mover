@@ -1,4 +1,4 @@
-hubitat_tile_mover � adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
+Hubitat Tile Mover: Short Readme / Usage Quick Reference
 
 Import (input) (only one; default is clipboard):
   --import:clipboard
