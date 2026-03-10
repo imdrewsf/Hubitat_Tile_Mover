@@ -1,20 +1,19 @@
-﻿# Hubitat Tile Mover
-
-<!-- TOC -->
+﻿<!-- TOC -->
 
 - [Overview:](#overview)
     - [Import, modify and output Hubitat dashboard layouts:](#import-modify-and-output-hubitat-dashboard-layouts)
     - [Layout Actions](#layout-actions)
     - [Additional Features](#additional-features)
+    - [Documentation Syntax:](#documentation-syntax)
 - [Layout Import Sources and Output Destinations:](#layout-import-sources-and-output-destinations)
     - [Import Sources](#import-sources)
     - [Output destinations](#output-destinations)
 - [Layout Actions Overview:](#layout-actions-overview)
     - [Layout Action types:](#layout-action-types)
-    - [Action targets:](#action-targets)
-        - [Key concepts:](#key-concepts)
-        - [Documentation Syntax:](#documentation-syntax)
-        - [Selecting Tiles:](#selecting-tiles)
+    - [Action Targets - Selecting Tiles](#action-targets---selecting-tiles)
+        - [Tile Selection](#tile-selection)
+        - [Target Area Overlap](#target-area-overlap)
+        - [Tile Conflicts - Destination Overlaps](#tile-conflicts---destination-overlaps)
 - [Primary Edit Actions](#primary-edit-actions)
     - [Insert](#insert)
     - [Move](#move)
@@ -24,10 +23,13 @@
     - [Clear](#clear)
     - [Crop](#crop)
     - [Prune](#prune)
+    - [Spacing](#spacing)
     - [Trim](#trim)
-- [CSS Actions](#css-actions)
+- [CSS Actions and Options](#css-actions-and-options)
     - [Copy CSS](#copy-css)
     - [Clear CSS](#clear-css)
+    - [Scrub CSS](#scrub-css)
+    - [Compact CSS](#compact-css)
 - [Supplemental Actions and Options](#supplemental-actions-and-options)
     - [Sort](#sort)
     - [Visual Layout Maps](#visual-layout-maps)
@@ -53,13 +55,14 @@
         - [Batch Overview](#batch-overview)
         - [Example](#example)
         - [Batched Actions in Detail](#batched-actions-in-detail)
-            - [The First Action (Run)](#the-first-action-run)
-            - [The second action:](#the-second-action)
-            - [The third action:](#the-third-action)
+            - [The first action (run): `--insert:cols`](#the-first-action-run---insertcols)
+            - [The second action: `--merge:cols`](#the-second-action---mergecols)
+            - [The third action: `--crop:range → --trim:top,left → --cleanupcss`](#the-third-action---croprange-→---trimtopleft-→---cleanupcss)
 
 <!-- /TOC -->
 
 <div style="page-break-after: always"></div>
+
 
 <a id="markdown-overview" name="overview"></a>
 
@@ -81,9 +84,10 @@
 * <b>[MERGE](#merge)</b> copy columns, rows or a rectangular range of tiles from another dashboard
 * <b>[INSERT](#insert)</b> full or partial empty columns or rows (push tiles over/down at column/row)
 * <b>[DELETE](#delete)</b> full or partial columns or rows of tiles (remove tiles and shift the layout left or up)
-* <b>[CLEAR](#clear)</b> columns, rows or a rectangular range of tiles but leaves the empty space.
+* <b>[CLEAR](#clear)</b> columns, rows or a rectangular range of tiles but leave the empty space.
 * <b>[CROP](#crop)</b> a layout by clearing all tiles not in columns, rows or a rectangular range
 * <b>[PRUNE](#prune)</b> a layout by tile or devices id.  Clear only specific id's or clear all ***except*** specific id's
+* <b>[SPACING](#spacing)</b> increase, decrease or set uniform spacing between all dashboard tiles.
 * <b>[TRIM](#trim)</b> a layout to remove empty top rows and/or left columns.
 
 <a id="markdown-additional-features" name="additional-features"></a>
@@ -100,6 +104,17 @@
 
 <div style="page-break-after: always"></div>
 
+<a id="markdown-documentation-syntax" name="documentation-syntax"></a>
+
+### Documentation Syntax:
+
+-  `< ... >` indicate required parameters.  Do not include the `<` or `>`.
+- `"< ... >"` indicate required parameters that should be in quotes.  Do not include the `<` or `>`.
+
+-  `[ ... ]` indicate optional parameters.  Do not include the `[` or `]`.
+- `"[ ... ]"` indicate optional parameters that should be in quotes.  Do not include the `[` or `]`.
+
+
 <a id="markdown-layout-import-sources-and-output-destinations" name="layout-import-sources-and-output-destinations"></a>
 
 ## Layout Import Sources and Output Destinations:
@@ -110,7 +125,7 @@
 
 Exactly one import method is used. If not specified, clipboard is the default.
 
-- Action Setting:
+- Setting:
   
   `--import:`***type***
   <br>
@@ -120,7 +135,7 @@ Exactly one import method is used. If not specified, clipboard is the default.
   `--import:file "<filename>"` — Read JSON text from file.
   `--import:hub "<url>"` — Fetch the full layout JSON from Hubitat using `url`.
   <br>
-- Dashboard URL format (typical):
+- Dashboard URL format (typical): 
   
   ```
   http://<hub-ip>/apps/api/<appId>/dashboard/<dashId>?access_token=<token>&local=true
@@ -143,7 +158,7 @@ Sets the destination to save dashboard layout JSON after layout actions have com
   `--output:terminal` — Print output to terminal.
   `--output:clipboard` — Write to clipboard (default)
   `--output:file "<filename>"` — Write to file.
-  `--output:hub "[url]"` — POST full layout JSON back to the hub at `url`
+  `--output:hub "[url]"` — Write layout JSON back to the hub at `url`
   <br>
 - Notes:
   
@@ -168,35 +183,39 @@ Sets the destination to save dashboard layout JSON after layout actions have com
 
 ### Layout Action types:
 
-1. **Primary edit actions** — make modifications to tiles.  Primary actions include insert, move, copy, merge, delete, clear, crop and prune.  Only one primary edit action can be per run.
-2. **Supplemental actions** — can be used standalone or with primary actions.  These include displaying visual layout maps, JSON sorting, orphaned CSS cleanup and trim functions.  Supplemental actions are always performed after primary actions.
+1. **Primary edit actions** — make modifications to tiles.  Primary actions include insert, move, copy, merge, delete, clear, crop and prune.  Only one primary edit action can be used per run.
+2. **Supplemental actions** — can be used standalone or with primary actions.  These include displaying visual layout maps, JSON sorting, orphaned CSS cleanup, CSS compact reformatting and trim functions.  Supplemental actions are always performed after primary actions have successfully completed.
 3. **Undo /restore action**  — `--undo_last` is a standalone action.  It supersedes all other actions.
 
-<a id="markdown-action-targets" name="action-targets"></a>
 
-### Action targets:
+<a id="markdown-action-targets---selecting-tiles" name="action-targets---selecting-tiles"></a>
 
-<a id="markdown-key-concepts" name="key-concepts"></a>
+### Action Targets - Selecting Tiles 
 
-#### Key concepts:
+<a id="markdown-tile-selection" name="tile-selection"></a>
+
+#### Tile Selection
 
 - A tile's location is determined by the row and column of its upper left corner.
 - A tile's span is the area it occupies, calculated as (row + height -1), (column + width -1).
-- Tiles whose span extends into, but are located (begin) outside of the target area, are considered to be target area "overlaps."
-
-<a id="markdown-documentation-syntax" name="documentation-syntax"></a>
-
-#### Documentation Syntax:
-
-- `< ... >` indicate required parameters.  Do not include the `<` or `>`.
-- `[ ... ]` indicate optional parameters.  Do not include the `[` or `]`.
-
-<a id="markdown-selecting-tiles" name="selecting-tiles"></a>
-
-#### Selecting Tiles:
-
 - By default, actions are applied only to tiles that are located (begin) in the target rows, column, or rectangular range.
-- To include tiles that overlap the boundaries of the target area, use the `--include_overlap` switch.
+
+<a id="markdown-target-area-overlap" name="target-area-overlap"></a>
+
+#### Target Area Overlap
+
+- Tiles whose span extends into, but are located (begin) outside of the target area, are considered to be target area "overlaps."
+- To include tiles that begin outside of the target area, but overlap its boundaries, use the `--include_overlap` switch.
+
+<a id="markdown-tile-conflicts---destination-overlaps" name="tile-conflicts---destination-overlaps"></a>
+
+#### Tile Conflicts - Destination Overlaps
+
+- During moving / copying actions, a tile conflict occurs when the span of a tile being copied / moved, would overlap with one or more existing tiles at the destination location. 
+- Copy, move and merge actions will abort if conflicts occur unless `--skip_overlap` or `--allow_overlap` is present.
+- Conflict detection is evaluated **once,** ***before*** copying / moving, against **existing destination tiles only**.  Tiles that overlap in their original position are not considered in conflict with each other when they are moved / copied.
+
+
 
 ---
 
@@ -234,7 +253,7 @@ Inserts empty whole or partial rows or columns by pushing tiles beyond the inser
     <br>
 - Options:
   
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
 
 ---
 
@@ -263,12 +282,12 @@ Moves tiles to a new location.
   - `--allow_overlap` — ignore conflicts and allow moved tiles to overlap existing tiles at the destination.
   - `--skip_overlap` — skip tiles that would conflict, move all others.
     <br>
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
     <br>
 - Notes:
-  
-  - Conflict detection is evaluated **once, \*before\*** moving/copying, against **existing destination tiles only**.  Any tiles that are being copied/moved can be overlapped and will not be considered in conflict.
-  - Default behavior: if any conflicts exist, abort before moving anything.
+  - Conflict detection is evaluated **once,** ***before*** moving/copying, against **existing destination tiles only**.
+  - Tiles that are being copied/moved can be overlapped and will not be considered in conflict.
+  - Actions will be aborted if conflicts are found unless `--allow_overlap` or `--skip_overlap` is present.
 
 ---
 
@@ -299,13 +318,13 @@ Same as Move, but originals remain.  Copies are created with new IDs. Existing t
     <br>
   - `--ignore_css` — disables creating/copying CSS for new IDs.
     <br>
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
     <br>
 - Notes:
   
   - ID allocation for new tiles:  New IDs are created sequentially beginning starting with 1 + max(highest existing tile ID, highest referenced tile ID in customCSS).  This prevents any orphaned CSS rules from being applied to new tiles.
   - By default, customCSS is checked for any tile specific CSS rules for copied tiles.  Any rules found are duplicated for the new tile id
-  - Conflict detection is evaluated **once, \*before\*** moving/copying, against **existing destination tiles only**.
+  - Conflict detection is evaluated **once,** ***before*** moving/copying, against **existing destination tiles only**.
   - Tiles that are being copied/moved can be overlapped and will not be considered in conflict.
   - Actions will be aborted if conflicts are found unless `--allow_overlap` or `--skip_overlap` is present.
 
@@ -319,7 +338,7 @@ Merge (copy) tiles from another dashboard layout into this layout.
 
 - Action:
   
-  `--merge:`***mode*** `--merge_source:`***type***` "<filename | hub>"`
+  `--merge:`***mode*** `--merge_source:`***type***` "<filename | url>"`
   <br>
 - Modes: `rows | cols | range`
   
@@ -329,8 +348,8 @@ Merge (copy) tiles from another dashboard layout into this layout.
   <br>
 - Source Types (required): `file | hub`
   
-  - `--merge_source:file "<filename>"` — load source JSON from file
-  - `--merge_source:hub "<other_dashboard_local_url>"` — fetch source JSON from hub
+  - `--merge_source:file "<filename>"` — load dashboard JSON from file
+  - `--merge_source:hub "<other_dashboard_local_url>"` — fetch dashboard JSON directly from the hub
     <br>
 - Selection Modifier:
   
@@ -343,13 +362,13 @@ Merge (copy) tiles from another dashboard layout into this layout.
     <br>
   - `--ignore_css` — disables creating/copying CSS for new IDs.
     <br>
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
-    <br>
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
+    <br> 
 - Notes:
   
   - ID allocation for new tiles:  New IDs are created sequentially beginning starting with 1 + max(highest existing tile ID, highest referenced tile ID in customCSS).  This prevents any orphaned CSS rules from being applied to new tiles.
   - By default, customCSS is checked for any tile specific CSS rules for copied tiles.  Any rules found are duplicated for the new tile id
-  - Conflict detection is evaluated **once, \*before\*** moving/copying, against **existing destination tiles only**.
+  - Conflict detection is evaluated **once,** ***before*** moving/copying, against **existing destination tiles only**.
   - Tiles that are being copied/moved can be overlapped and will not be considered in conflict.
   - Actions will be aborted if conflicts are found unless `--allow_overlap` or `--skip_overlap` is present.
 
@@ -380,13 +399,13 @@ Deletes tiles located in the target rows or columns, then shifts remaining tiles
 - Options:
   
   - `--force` — skip confirmation prompts -- assume yes.
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
-  - `--cleanup_css` — remove tile-specific CSS rules from 'customCSS' for tiles removed or cleared by the current action.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
+  - `--cleanup_css` — remove tile-scoped CSS rules from 'customCSS' for tiles removed or cleared by the current action.
     <br>
 - Notes:
   
-  - The default behavior is to leave tile CSS rules for tiles removed or cleared by the current operation in place, unless --cleanup_css` is present.
-  - Use `--scrub_css` to remove all orphaned CSS rules, including rules for tiles removed or cleared by the current operation. all orphaned CSS rules, including rules for tiles removed or cleared by the current operation.
+  - The default behavior is to leave tile CSS rules for tiles removed or cleared by the current operation in place, unless `--cleanup_css` is present.
+  - Use `--scrub_css` to remove all orphaned CSS rules, including rules for tiles removed or cleared by the current operation. 
 
 ---
 
@@ -413,13 +432,13 @@ Removes tiles in the target rows, columns or range but does not change the dashb
 - Options:
   
   - `--force` — skip confirmation prompts -- assume yes.
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
-  - `--cleanup_css` — remove tile-specific CSS rules from 'customCSS' for tiles removed or cleared by the current action.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
+  - `--cleanup_css` — remove tile-scoped CSS rules from 'customCSS' for tiles removed or cleared by the current action.
     <br>
 - Notes:
   
-  - The default behavior is to leave tile CSS rules for tiles removed or cleared by the current operation in place, unless --cleanup_css` is present.
-  - Use `--scrub_css` to remove all orphaned CSS rules, including rules for tiles removed or cleared by the current operation. all orphaned CSS rules, including rules for tiles removed or cleared by the current operation.
+  - The default behavior is to leave tile CSS rules for tiles removed or cleared by the current operation in place, unless `--cleanup_css` is present.
+  - Use `--scrub_css` to remove all orphaned CSS rules, including rules for tiles removed or cleared by the current operation. 
 
 ---
 
@@ -446,15 +465,15 @@ Clears tiles outside of the target rows, columns or range.  The position of rema
 - Options:
   
   - `--force` — skip confirmation prompts -- assume yes.
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
-  - `--cleanup_css` — remove tile-specific CSS rules from 'customCSS' for tiles removed or cleared by the current action.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
+  - `--cleanup_css` — remove tile-scoped CSS rules from 'customCSS' for tiles removed or cleared by the current action.
     <br>
 - Notes:
   
-  - The default behavior is to leave tile CSS rules for tiles removed or cleared by the current operation in place, unless --cleanup_css` is present.
-  - Use `--scrub_css` to remove all orphaned CSS rules, including rules for tiles removed or cleared by the current operation. all orphaned CSS rules, including rules for tiles removed or cleared by the current operation.
-  - At least one tile must exist in the target rows, columns or range as at least one tile must remain after cropping.
-  - Use `--trim`, `--trim:top` , `--trim:left` or `--trim:top,left` to remove blank rows on the top or columns on the left of the remaining tiles.
+  - The default behavior is to leave tile CSS rules for tiles removed or cleared by the current operation in place, unless `--cleanup_css` is present.
+  - Use `--scrub_css` to remove all orphaned CSS rules, including rules for tiles removed or cleared by the current operation. 
+  - At least one tile must remain after cropping.
+  - Use `--trim`, `--trim:top` or `--trim:left` to remove blank rows and columns above or left of the remaining tiles.
 
 ---
 
@@ -462,13 +481,13 @@ Clears tiles outside of the target rows, columns or range.  The position of rema
 
 ### Prune
 
-Clears all tiles listed, or all tiles ***except*** those listed in a comma separated list of tile ids or device ids.  The position of remaining tiles is unchanged.
+Clears tiles based on a list of either tile-id numbers or device-id numbers.  `--prune` removes only those tiles listed, while `--prune_except` removes all tiles ***except*** those tiles listed.  Pruned tile are cleared.  No changes are made to the layout of the remaining tiles.
 
 - Actions:
   
-  `--prune:`***mode***` <list>`
+  `--prune:`***mode***` <"list">`
   
-  `--prune_except:`***mode***` <list>`
+  `--prune_except:`***mode***` <"list">`
   
   <br>
 - Modes: `ids | devices`
@@ -489,15 +508,62 @@ Clears all tiles listed, or all tiles ***except*** those listed in a comma separ
 - Options:
   
   - `--force` — skip confirmation prompts -- assume yes.
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
-  - `--cleanup_css` — remove tile-specific CSS rules from 'customCSS' for tiles removed or cleared by the current action.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
+  - `--cleanup_css` — remove tile-scoped CSS rules from 'customCSS' for tiles removed or cleared by the current action.
     <br>
 - Notes:
   
-  - The default behavior is to leave tile CSS rules for tiles removed or cleared by the current operation in place, unless --cleanup_css` is present.
-  - Use `--scrub_css` to remove all orphaned CSS rules, including rules for tiles removed or cleared by the current operation. all orphaned CSS rules, including rules for tiles removed or cleared by the current operation.
-  - At least one matching tile id or device id must exist.  At least one tile must remain after pruning.
+  - If `--cleanup_css` is not present, tile-scoped custom CSS rules for removed or cleared tiles will be left in place.  
+  - Use `--scrub_css` to remove all orphaned CSS rules, including rules for tiles removed or cleared by the current operation. 
+  - At least one tile must remain after pruning.
   - Use `--trim`, `--trim:top` or `--trim:left` to remove blank rows on the top or columns on the left of the remaining tiles.
+
+---
+
+<a id="markdown-spacing" name="spacing"></a>
+
+### Spacing
+
+Increases or decreases or sets uniform spacing between all dashboard tiles.
+
+- Actions:
+  
+  `--spacing_add:`***mode*** `<+/- cells>`
+
+  `--spacing_set:`***mode*** `<# of cells>`
+  <br>
+
+- Modes: `rows | cols | all`
+
+  `--spacing_add:rows <cells>`
+  `--spacing_add:cols <cells>`
+  `--spacing_add:all  <cells>`
+
+  `--spacing_set:rows <cells>`
+  `--spacing_set:cols <cells>`
+  `--spacing_set:all  <cells>`
+
+  - `add`— increase or decreases existing space between tiles or tile groups in rows, columns or both (all). Use a positive number to increase the spaces by the number of `cells`, or a negative number to decrease existing spacing.
+
+  - `set`— sets the spacing uniformly around all tiles to the number of `cells`.  
+<br>
+
+- Options:
+  
+  - `--include_overlap` — Changes spacing of overlapping tiles individually rather than as a group.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
+    <br>
+- Note:
+  
+  - Tile spacing will never be reduced below 0 cells between tiles.
+  - Spacing between tiles will never be reduced below zero.
+  - Overlapping tiles are treated as a grouped single tile with a span the total union of the group (tile with the farthest right edge or bottom edge in the group determines the size of the group tile.)
+  - `Overlapping tiles that share the same top left corner (location) are treated as single merged tile and kept together when spacing is applied.
+  - Individual tile sizes remain unchanged.
+  - `--include_overlap` will make a "best effort" is made to increase or decrease space between tiles within groups as well as between all other tiles.  As a change in spacing within a group of tiles will change the size of the grouped tile, it may have unpredictable results.
+  - `--no_overlap` will distribute all overlapping tiles into the layout.  Depending on the number of overlapping tiles, moving overlapping tiles into the layout may result significant changes to the position of other tiles.  
+  It is particularly useful when adding a lot of tiles quickly to a dashboard.  Tiles can be haphazardly added, then spread out by setting spacing and with the `--no_overlap` option.
+  - When combined with another action, trimming will only occur after successful completion of the primary action.
 
 ---
 
@@ -511,7 +577,7 @@ Removes blank rows above the top-most tile and/or blank columns left of the left
   
   `--trim:`***mode***
   <br>
-- Modes: `top | left | top,left`
+- Modes: `top | left | (top,left)`
   
   `--trim` (defaults to `top,left`)
   `--trim:top`
@@ -520,7 +586,7 @@ Removes blank rows above the top-most tile and/or blank columns left of the left
   <br>
 - Options:
   
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
     <br>
 - Note:
   
@@ -531,9 +597,9 @@ Removes blank rows above the top-most tile and/or blank columns left of the left
 
 <div style="page-break-after: always"></div>
 
-<a id="markdown-css-actions" name="css-actions"></a>
+<a id="markdown-css-actions-and-options" name="css-actions-and-options"></a>
 
-## CSS Actions
+## CSS Actions and Options
 
 <a id="markdown-copy-css" name="copy-css"></a>
 
@@ -553,17 +619,34 @@ Copies CSS rules from one tile to another.
   `--copy_css:add <from_tile-id> <to_tile-id>`
   <br>
   
-  - `merge` —  Copies rules checking for conflicts with existing rules.  Conflicts generate user prompts to overwrite or keep the rules in the destination tile.  Default is overwrite.
+  - `merge` —  Copies rules checking for conflicts with existing rules.  Conflicts generate user a prompt to overwrite or keep (default) existing rules.
     <br>
-  - `replace` — Removes all rules from the destination tile and replaces them with the rules being copied.
+  - `replace` — Removes all rules from the destination tile and replaces them with the rules being copied.  Generates a confirmation prompt before proceeding.
     <br>
-  - `overwrite` — Copies rules and overwrites any conflicting rules.  This is the same as `--copy_css:merge --force.`
+  - `overwrite` — Copies rules checking for conflicts with existing rules.  Conflicts generate a user prompt to overwrite (default) or keep existing rules.
     <br>
-  - `add` — Copies all rules to the target tile, regardless of any potential conflicts.
+  - `add` — Copies all rules to the target tile, regardless of any potential conflicts.  Conflicts generate a user prompt to confirm adding (default) or skipping conflicting rules.
     <br>
+
 - Options:
   
-  - `--force` — skip confirmation prompts -- assume yes.
+  - `--force` — skip confirmation prompts and selects the default response.
+<br>
+
+-Notes:
+
+  - All modes generate a confirmation prompt if `--force` is not present.  
+  - Rule conflicts are rules if copied, would conflict with an existing rule with the same scope and declarations.
+
+    Contains conflicts:
+    ❌ `#tile-123 {color: red; padding: 5px;}                 ` ⬅️➡️ ` ❌ #tile-141 {margin: 2px; padding: 5px;}`
+
+    Not a conflict:
+    ✅ `#tile-123 {background-color: transparent; color: red;}` ⬅️➡️ ` ✅ #tile-141 {margin: 2px; padding: 5px;}`
+
+
+  - `merge` and `overwrite` differ only in the default action when used with `--force`.
+  - Add is a combination of `merge` and `overwrite` in that in the event of conflicting rules, rules from both tiles are kept.
 
 ---
 
@@ -571,16 +654,88 @@ Copies CSS rules from one tile to another.
 
 ### Clear CSS
 
-Removes CSS rules for a tile
+Removes CSS rules in customCSS with selectors referencing a tile-id.
 
 - Action
 
-`--clear_css <tile-id>` — Removes all CSS rules for the specified tile.
+  `--clear_css <"list">` — Removes all CSS rules for the listed tiles.
+<br>
+
+- Acceptable `list` Values:
+  
+  - Explicit values: `1,4,6,8,9`
+  - Comparisons: `<29`
+  - Inclusive ranges: `3-20,40-58`
+  - Combination: `<29,43,46,>=100`
+    <br>
+
+- Option:
+  
+  - `--force` — skip confirmation prompts -- assume yes.
+<br>
+
+- Note:
+
+  - Only CSS rules for existing tiles can be cleared.  Orphaned rules can only be removed with the `--scrub_css` action.
+---
+
+<a id="markdown-scrub-css" name="scrub-css"></a>
+
+### Scrub CSS
+
+Removes all tile-scoped CSS rules from customCSS with selectors that reference tiles that are no longer in the current dashboard layout.  
+
+- Action
+
+  `--scrub_css`
 <br>
 
 - Option:
   
   - `--force` — skip confirmation prompts -- assume yes.
+<br>
+
+- Notes:
+  - May be used as a standalone primary action or as a supplemental action after the primary action has completed successfully.
+  - See <b>[CSS Overview](#css-overview)</b> for more information
+
+---
+
+<a id="markdown-compact-css" name="compact-css"></a>
+
+### Compact CSS
+
+Reformats customCSS in a compact, sortable and more easily parsed format.
+
+- Selector rules are output as one line each.
+- Rule bodies are condensed to one line ( whitespace compacted; strings/comments preserved as text).
+- Selector lists are split to separate rules per selector 
+  - Example:
+
+    `#tile-40, #tile123 { ... }` ➡️ `#tile-40 { ... } `
+    `                          ` ➡️ `#tile-123 { ... }`
+   <br>
+
+- Rules are sorted in groups:
+  1.  Root Tags, not tile-ids, etc.
+  2.  Non tile class selectors starting with "." excluding ".tile-id"
+  3.  Tile class selectors (#tile-id, .tile-id) ordered by tile-id.
+
+  - Commented out rules and comments with tile references (#tile-id, .#tile-id) are sorted with other tile selectors.
+  - Comments that do not contain specific tile references are sorted into group 1.
+<br>
+
+- Action
+
+  `--compact_css`
+<br>
+
+- Notes:
+  - CSS reformatting is performed last, after all other operations have completed. and can be used as a standalone primary action or as a supplemental action.  
+  - See <b>[CSS Overview](#css-overview)</b> for more information
+
+
+---
 
 <div style="page-break-after: always"></div>
 
@@ -659,7 +814,7 @@ Show before, outcome and conflict layout previews in the terminal
 - Prompts / Confirmation Options:
   
   - `--force` — Suppress confirmation prompts for actions which remove tiles or custom CSS rules.
-  - `--confirm_keep` — After writing output, prompts (independently of `--force`) to keep or undo the changes made.
+  - `--confirm_keep` — enables a confirmation prompt (independent of `--force`) after writing output, to keep or undo the changes.
     
     <br>
 - Safety / Undo Options:
@@ -933,7 +1088,6 @@ Comment blocks within CSS can be problematic and complicate parsing and be diffi
   &nbsp;&nbsp;➡️`#tile-40 /* comment #1 */, /* comment #2 */ #tile-123 /* comment #3 */, #tile-50 { ... }`
   &nbsp;&nbsp;➡️`/* comment #2 */ #tile-141 /* comment #3 */ { ... }`
   <br>
-
 - 🟡 **Rules inside comment blocks / commented out rules**
   
   &nbsp;&nbsp;`/* #tile-123 { ... } */`
@@ -974,7 +1128,6 @@ When tiles are removed and `--cleanup_css` is present during delete, clear, crop
     - The neutralized tokens (`tile_123`, `#tile_123`, `.tile_123`) are intentionally **not valid selectors** for the real tile. They exist to make it obvious the comment is historical and to prevent confusion during later review.
 
 ---
-
 
 <a id="markdown-tool-usage-examples" name="tool-usage-examples"></a>
 
@@ -1060,9 +1213,9 @@ python hubitat_tile_mover.py --import:clipboard --output:hub "<dashboard_local_u
 
 #### Batched Actions in Detail
 
-<a id="markdown-the-first-action-run" name="the-first-action-run"></a>
+<a id="markdown-the-first-action-run---insertcols" name="the-first-action-run---insertcols"></a>
 
-##### The First Action (Run)
+##### The first action (run): `--insert:cols`
 
 1. Imports a layout from the hub
 2. Inserts 5 blank columns at column 10 in the layout
@@ -1071,9 +1224,9 @@ python hubitat_tile_mover.py --import:clipboard --output:hub "<dashboard_local_u
    
    <br>
 
-<a id="markdown-the-second-action" name="the-second-action"></a>
+<a id="markdown-the-second-action---mergecols" name="the-second-action---mergecols"></a>
 
-##### The second action:
+##### The second action: `--merge:cols`
 
 1. Imports the layout saved by the first action from the clipboard.
 2. Copies tiles in columns 15-20 from another dashboard into the blank columns created by the previous action at column 10
@@ -1082,9 +1235,9 @@ python hubitat_tile_mover.py --import:clipboard --output:hub "<dashboard_local_u
 
 <br>
 
-<a id="markdown-the-third-action" name="the-third-action"></a>
+<a id="markdown-the-third-action---croprange-→---trimtopleft-→---cleanupcss" name="the-third-action---croprange-→---trimtopleft-→---cleanupcss"></a>
 
-##### The third action:
+##### The third action: `--crop:range → --trim:top,left → --cleanup_css`
 
 1. Imports the layout saved by the second action from the clipboard.
 2. Removes all dashboard tiles except those located or having some portion inside the rectangular range of (row 10, col 10) to (row 40, col 30).

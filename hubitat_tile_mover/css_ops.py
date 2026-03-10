@@ -1002,29 +1002,78 @@ def _comment_sort_key(comment_text: str) -> str:
     return _collapse_ws_one_line(comment_text)
 
 
+def _sort_key_for_comment_line(comment_line: str) -> str:
+    """Return a stable sort key for a standalone comment line in compact_css.
+
+    Requirements:
+      - Commented-out rules (/* selector { ... } */) should be sorted as if they
+        were not commented out.
+      - Standalone comments that reference a tile id (e.g. "tile-125") should
+        sort alongside the rules for that tile id.
+
+    Implementation notes:
+      - If the comment contains CSS rule blocks, derive the key from the first
+        non-@ selector found.
+      - Otherwise, if the comment mentions a tile id, derive the key from that
+        tile selector.
+      - Otherwise, treat it as "everything else".
+    """
+    line = (comment_line or "").strip()
+    inner = _comment_inner_text(line)
+
+    # 1) Commented-out CSS rules: sort by the first selector found.
+    if _looks_like_css_rules(inner):
+        try:
+            for n in _parse_css_nodes(inner):
+                if isinstance(n, CssBlock):
+                    pre0 = (n.prelude or "").strip()
+                    if not pre0 or pre0.startswith("@"): 
+                        continue
+                    sel_items = _split_selector_list(_normalize_selector_pre(pre0))
+                    first_sel = (sel_items[0].strip() if sel_items else "")
+                    if first_sel:
+                        base = _sort_key_for_selector(first_sel)
+                        return f"{base} ~comment"
+        except Exception:
+            pass
+
+    # 2) Plain comments with tile references: pin to the first tile id.
+    ids = sorted(_tile_ids_in_comment_text(line))
+    if ids:
+        base = _sort_key_for_selector(f"#tile-{ids[0]}")
+        return f"{base} ~comment"
+
+    # 3) Fallback: treat as "everything else".
+    return f"0 {_collapse_ws_one_line(line)}"
+
+
 def _sort_key_for_selector(selector: str) -> str:
     """Return a stable sort key for a selector line.
 
     Sort order for compact_css output:
-      0) Lines whose selector starts with '.' (class selectors) EXCLUDING
+      0) Everything else.
+      1) Lines whose selector starts with '.' (class selectors) EXCLUDING
          actual tile selectors like '.tile-N'.
-      1) Tile selectors (#tile-N or .tile-N), sorted numerically by N.
-      2) Everything else.
+      2) Tile selectors (#tile-N or .tile-N), sorted numerically by N.
+
+    Note:
+      This matches the user-facing documentation ordering of categories as
+      (3) then (1) then (2).
     """
     s = _strip_block_comments_outside_strings(selector or "").strip()
     m = re.search(r"(?:#tile-|\.tile-)(\d+)\b", s)
     if m:
         try:
             tid = int(m.group(1))
-            return f"1 tile-{tid:09d} {s}"
+            return f"2 tile-{tid:09d} {s}"
         except Exception:
             pass
 
     # Non-tile class selectors should appear before tile selectors.
     if s.startswith("."):
-        return f"0 {s}"
+        return f"1 {s}"
 
-    return f"2 {s}"
+    return f"0 {s}"
 
 def compact_css_stylesheet(css: str) -> str:
     """Compact and sort a stylesheet.
@@ -1056,7 +1105,7 @@ def compact_css_stylesheet(css: str) -> str:
                     imports.append((line.lower(), indent + line))
                     continue
                 if line.startswith("/*"):
-                    key = f"3 {_comment_sort_key(line)}"
+                    key = _sort_key_for_comment_line(line)
                 else:
                     key = f"4 {line}"
                 items.append((key, indent + line))

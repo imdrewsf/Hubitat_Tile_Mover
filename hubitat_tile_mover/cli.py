@@ -5,6 +5,37 @@ import sys
 
 from . import __version__
 
+def _safe_stdout_write(text: str) -> None:
+    """Write text to stdout without UnicodeEncodeError on Windows redirected output."""
+    try:
+        sys.stdout.write(text)
+        if not text.endswith("\n"):
+            sys.stdout.write("\n")
+    except UnicodeEncodeError:
+        # Fall back to UTF-8 bytes with replacement.
+        data = (text + ("\n" if not text.endswith("\n") else "")).encode("utf-8", errors="replace")
+        try:
+            sys.stdout.buffer.write(data)
+        except Exception:
+            # Last resort: strip non-encodable chars
+            sys.stdout.write(data.decode("utf-8", errors="replace"))
+    sys.stdout.flush()
+
+
+
+
+class _SpacingAddModeAction(argparse.Action):
+    """Stores (mode, signed_cells) where mode is rows|cols|all derived from option string."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        mode = "all"
+        if option_string and ":" in option_string:
+            mode = option_string.split(":", 1)[1]
+        try:
+            cells = int(values)
+        except Exception:
+            raise argparse.ArgumentTypeError(f"Expected integer, got: {values!r}")
+        setattr(namespace, self.dest, (mode, cells))
 # Short help formatting notes (0.9.98):
 # - Removed user-facing JSON formatting/shape details.
 # - Added blank lines between layout action groups for readability.
@@ -27,6 +58,9 @@ Output destinations (repeatable; default is clipboard if none specified):
 Layout actions (at most ONE per run):
   Insert:   --insert:rows COUNT AT_ROW
             --insert:cols COUNT AT_COL
+
+  Spacing:  --spacing_add:rows CELLS  |  --spacing_add:cols CELLS  |  --spacing_add:all CELLS
+            --spacing_set:rows GAP    |  --spacing_set:cols GAP    |  --spacing_set:all GAP
 
   Move:     --move:cols START END DEST
             --move:rows START END DEST
@@ -61,7 +95,7 @@ Layout actions (at most ONE per run):
             --copy_css:overwrite FROM_TILE TO_TILE
             --copy_css:replace FROM_TILE TO_TILE
             --copy_css:add FROM_TILE TO_TILE
-            --clear_css TILE_ID
+            --clear_css <spec>
 
 Additional actions (may be combined with the single layout action):
   --trim[:top|left|top,left]        (default: top,left; left,top accepted)
@@ -183,6 +217,28 @@ ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
     --trim:top,left        (default)
     --trim:left,top        (also accepted)
 
+  Spacing (performed after the layout action, before trim/sort):
+
+    Add/subtract spacing between units:
+      --spacing_add:rows CELLS
+      --spacing_add:cols CELLS
+      --spacing_add:all  CELLS
+        CELLS may be negative. Example: if a gap is 9 and you run --spacing_add:all -2, it becomes 7.
+        Gaps are clamped at 0 (never negative).
+
+    Set spacing to a fixed number of blank cells:
+      --spacing_set:rows GAP
+      --spacing_set:cols GAP
+      --spacing_set:all  GAP
+        GAP must be >= 0.
+
+    Overlap behavior for spacing:
+      Default: overlapping tiles are grouped into overlap-unions (treated as a single unit).
+      --include_overlap (spacing_set only): adjusts spacing within each overlap-union only.
+      --no_overlap (spacing_set only): treat EVERY tile as its own unit (global un-overlap).
+      NOTE: --include_overlap and --no_overlap are mutually exclusive.
+
+
   Sort (only applied if --sort is present; affects output order only):
     --sort                 (same as --sort:irc)
     --sort:<SPEC>
@@ -214,7 +270,7 @@ ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
       Rule duplication uses the same remap behavior as tile copy/merge (selector remap and body rewrite of tile-OLD→tile-NEW).
 
     Clear CSS for an existing tile id (tile remains):
-      --clear_css TILE_ID
+      --clear_css <spec>
 
 
   Compact CSS (performed last; can run alone):
@@ -297,6 +353,37 @@ DIAGNOSTICS
 """
 
 
+
+
+
+class _SpacingSetModeAction(argparse.Action):
+    """Stores (mode, gap) where mode is rows|cols|all derived from option string.
+
+    GAP must be a non-negative integer.
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        mode = "all"
+        if option_string and ":" in option_string:
+            mode = option_string.split(":", 1)[1]
+        try:
+            gap = int(values)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"Expected integer, got: {values!r}")
+        if gap < 0:
+            raise argparse.ArgumentTypeError(f"Expected non-negative integer, got: {values!r}")
+        setattr(namespace, self.dest, (mode, gap))
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        mode = "all"
+        if option_string and ":" in option_string:
+            mode = option_string.split(":", 1)[1]
+        try:
+            gap = int(values)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"Expected integer, got: {values!r}")
+            if gap < 0:
+                raise argparse.ArgumentTypeError(f"Expected non-negative integer, got: {values!r}")
 class TileSorterArgumentParser(argparse.ArgumentParser):
     def format_help(self) -> str:
         # Default help is slim; use --help_full for the expanded help text.
@@ -311,7 +398,7 @@ class TileSorterArgumentParser(argparse.ArgumentParser):
 
 class HelpFullAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        print(FULL_HELP)
+        _safe_stdout_write(FULL_HELP)
         raise SystemExit(0)
 
 
@@ -454,6 +541,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="(see --help_full for details)",
     )
 
+
+
+    ops.add_argument(
+        "--spacing_add:rows",
+        dest="spacing_add",
+        metavar="CELLS",
+        action=_SpacingAddModeAction,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--spacing_add:cols",
+        dest="spacing_add",
+        metavar="CELLS",
+        action=_SpacingAddModeAction,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--spacing_add:all",
+        dest="spacing_add",
+        metavar="CELLS",
+        action=_SpacingAddModeAction,
+        help="(see --help_full for details)",
+    )
+
+
+    ops.add_argument(
+        "--spacing_set:rows",
+        dest="spacing_set",
+        metavar="GAP",
+        action=_SpacingSetModeAction,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--spacing_set:cols",
+        dest="spacing_set",
+        metavar="GAP",
+        action=_SpacingSetModeAction,
+        help="(see --help_full for details)",
+    )
+    ops.add_argument(
+        "--spacing_set:all",
+        dest="spacing_set",
+        metavar="GAP",
+        action=_SpacingSetModeAction,
+        help="(see --help_full for details)",
+    )
     ops.add_argument(
         "--move:cols",
         "--move_cols",
@@ -691,9 +824,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--clear_css",
         "--clear-css",
         dest="clear_tile_css",
-        metavar="TILE_ID",
-        type=int,
-        help="Remove tile-specific CSS rules for a tile id (does not remove the tile)",
+        metavar="SPEC",
+        type=str,
+        help="Remove tile-specific CSS rules for tile id(s) matched by SPEC (does not remove tiles). SPEC matches --prune:ids syntax (comma list, ranges, comparisons).",
     )
 
     # Legacy CSS action aliases (accepted but not documented)
@@ -708,6 +841,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     filters_grp = p.add_argument_group("Filters")
     filters_grp.add_argument("--include_overlap", "--include-overlap", action="store_true", help="(see --help_full for details)")
+    filters_grp.add_argument("--no_overlap", "--no-overlap", action="store_true", help="(see --help_full for details)")
     filters_grp.add_argument("--col_range", "--col-range", nargs=2, metavar=("COL_START", "COL_END"), type=int, help="(see --help_full for details)")
     filters_grp.add_argument("--row_range", "--row-range", nargs=2, metavar=("ROW_START", "ROW_END"), type=int, help="(see --help_full for details)")
 

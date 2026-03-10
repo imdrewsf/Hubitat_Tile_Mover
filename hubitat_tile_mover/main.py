@@ -4,6 +4,13 @@ import os
 import sys
 from typing import Dict, List, Optional, Tuple
 
+from .util import ilog, prompt_yes_no, prompt_yes_no_or_die, format_id_sample, ok, warn, layout_fingerprint
+
+def vlog(enabled: bool, msg: str) -> None:
+    """Verbose logger."""
+    if enabled:
+        ilog(msg)
+
 from .cli import build_parser
 from .hubio import hub_import_layout, hub_post_layout_with_refresh
 from .io_helpers import (
@@ -33,6 +40,7 @@ from .ops_insert import insert_cols, insert_rows
 from .ops_merge import merge_cols, merge_range, merge_rows
 from .ops_move import move_cols, move_range, move_rows
 from .ops_trim import trim_tiles
+from .ops_spacing import adjust_tile_spacing, set_tile_spacing
 from .map_view import render_tile_map
 from .sort_tiles import complete_sort_spec, sort_tiles
 from .geometry import ranges_overlap, rects_overlap
@@ -49,6 +57,7 @@ from .css_ops import (
     collect_selector_item_bodies,
     drop_selector_items_by_keys,
     filter_css_fragment_duplicates,
+    find_standalone_comment_tile_refs,
     generate_css_for_id_map,
     get_custom_css,
     normalize_css_body,
@@ -59,7 +68,7 @@ from .css_ops import (
     tile_has_selector_rules,
     tile_ids_in_css,
 )
-from .util import die, vlog, ok, wlog, prompt_yes_no, prompt_yes_no_or_die, layout_fingerprint
+# # # from .util import die, ilog, vlog, ok, wlog, prompt_yes_no, prompt_yes_no_or_die, layout_fingerprint  # removed: avoid local binding  # removed: avoid local binding  # removed: avoid local binding
 
 
 # If a significant amount of time has passed since the last run, require confirmation
@@ -329,8 +338,22 @@ def _compute_before_map_mark_rects(
         add([t for t in tiles if as_int(t, "id") in {int(from_id), int(to_id)}])
 
     if getattr(args, "clear_tile_css", None) is not None:
-        tid = int(getattr(args, "clear_tile_css"))
-        add([t for t in tiles if as_int(t, "id") == tid])
+        # --clear_css now accepts the same SPEC syntax as --prune:ids.
+        spec = str(getattr(args, "clear_tile_css"))
+        try:
+#             from .ops_crop import parse_prune_id_spec  # removed: avoid local binding of parse_prune_id_spec
+            ids = parse_prune_id_spec(spec, tiles, op_label="--clear_css")
+        except Exception:
+            # Back-compat: allow a single integer id.
+            ids = set()
+            s = spec.strip()
+            if s.lstrip("+-").isdigit():
+                try:
+                    ids = {int(s)}
+                except Exception:
+                    ids = set()
+        if ids:
+            add([t for t in tiles if as_int(t, "id") in ids])
 
     return [tile_rect(t) for t in marked_tiles]
 
@@ -468,6 +491,16 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # Option sanity checks
+    if getattr(args, "no_overlap", False) and getattr(args, "include_overlap", False):
+        die("ERROR: --no_overlap and --include_overlap cannot be used together.")
+
+    # --no_overlap scope: only valid with --spacing_set:*
+    if getattr(args, "no_overlap", False) and getattr(args, "spacing_set", None) is None:
+        die("ERROR: --no_overlap is only valid with --spacing_set:rows|cols|all.")
+    if getattr(args, "no_overlap", False) and getattr(args, "spacing_add", None) is not None:
+        die("ERROR: --no_overlap cannot be used with --spacing_add:*. Use --spacing_set:* instead.")
 
     if args.indent < 0:
         die("--indent must be >= 0.")
@@ -662,9 +695,9 @@ def main(argv: Optional[List[str]] = None) -> None:
             hub_post_layout_with_refresh(url, hub_ctx_current.layout_url, out_obj, verbose=args.verbose, debug=args.debug)
 
         dests = ", ".join([(k if k != "file" else f"file:{p}") for (k, p) in outputs])
-        from .util import ok as _ok
+#         from .util import ok as _ok  # removed: avoid local binding
         import sys as _sys
-        print(f"{_ok('OK:')} undo applied. Output written to {dests}.", file=_sys.stderr)
+        print(f"{ok('OK:')} undo applied. Output written to {dests}.", file=sys.stderr)
         return
 
 
@@ -743,9 +776,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     has_sort = bool((args.sort is not None) or (getattr(args, "order", None) is not None))
     # Standalone map view mode: --show_map (any mode) with no other actions.
     # This mode should only render the imported layout map and still check for orphan CSS.
-    view_only = bool(show_map) and not (has_movement or has_trim or args.scrub_css or args.compact_css or has_sort)
+    view_only = bool(show_map) and not (has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort)
 
-    if not (has_movement or has_trim or args.scrub_css or args.compact_css or has_sort or view_only):
+    if not (has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort or view_only):
         die(
             "No operation specified. Use one movement/edit option and/or trim and/or --sort and/or --scrub_css and/or --compact_css, or use --show_map to view the imported layout. Use -h for help."
         )
@@ -930,7 +963,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 no_scale=no_scale,
             ),
             end='',
-            file=_sys.stderr,
+            file=sys.stderr,
         )
 
     # Standalone map view mode ends here: still check and warn for orphan CSS, but do not write outputs unless explicitly requested.
@@ -941,7 +974,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             existing_ids0 = {as_int(t, "id") for t in tiles_before_map if t.get("id") is not None}
             orphans0 = orphan_tile_ids_in_css(css_text0, existing_ids0) if css_text0 else set()
             if orphans0 and (not args.quiet):
-                from .util import wlog, format_id_sample
+#                 from .util import wlog, format_id_sample  # removed: avoid local binding
 
                 wlog(
                     f"Found {len(orphans0)} orphan CSS tile id(s) in customCSS (no matching tile). "
@@ -990,6 +1023,61 @@ def main(argv: Optional[List[str]] = None) -> None:
             row_range=row_range,
             debug=args.debug,
         )
+
+
+
+    elif getattr(args, "spacing_add", None) is not None:
+        mode, cells = args.spacing_add
+        if getattr(args, "verbose", False):
+            _before_pos = {t.get("id"): (t.get("row"), t.get("col")) for t in tiles}
+        adjust_tile_spacing(
+            tiles,
+            cells=int(cells),
+            include_overlap=bool(args.include_overlap),
+            no_overlap=bool(getattr(args, "no_overlap", False)),
+            mode=str(mode),
+        )
+        if getattr(args, "verbose", False):
+            _after_pos = {t.get("id"): (t.get("row"), t.get("col")) for t in tiles}
+            _changed = sum(1 for k,v in _after_pos.items() if _before_pos.get(k) != v)
+            ilog(f"--spacing_add:{mode} {cells}: shifted {_changed} tile(s).")
+
+    elif getattr(args, "spacing_set", None) is not None:
+        mode, gap = args.spacing_set
+        mode = str(mode)
+        gap = int(gap)
+        if gap < 0:
+            die(f"--spacing_set:{mode}: GAP must be >= 0, got: {gap}")
+        _rows_snapshot = None
+        _cols_snapshot = None
+        if mode == "rows":
+            _cols_snapshot = {t.get("id"): t.get("col") for t in tiles}
+        elif mode == "cols":
+            _rows_snapshot = {t.get("id"): t.get("row") for t in tiles}
+        if getattr(args, "verbose", False):
+            _before_pos = {t.get("id"): (t.get("row"), t.get("col")) for t in tiles}
+        set_tile_spacing(
+            tiles,
+            gap=gap,
+            include_overlap=bool(args.include_overlap),
+            no_overlap=bool(getattr(args, 'no_overlap', False)),
+            mode=mode,
+        )
+        # Defensive: ensure axis-only modes do not alter the other axis, regardless of ops implementation.
+        if _cols_snapshot is not None:
+            for t in tiles:
+                tid = t.get("id")
+                if tid in _cols_snapshot:
+                    t["col"] = _cols_snapshot[tid]
+        if _rows_snapshot is not None:
+            for t in tiles:
+                tid = t.get("id")
+                if tid in _rows_snapshot:
+                    t["row"] = _rows_snapshot[tid]
+        if getattr(args, "verbose", False):
+            _after_pos = {t.get("id"): (t.get("row"), t.get("col")) for t in tiles}
+            _changed = sum(1 for k, v in _after_pos.items() if _before_pos.get(k) != v)
+            ilog(f"--spacing_set:{mode} {gap}: shifted {_changed} tile(s).")
 
     elif args.move_cols:
         s, e, d = args.move_cols
@@ -1316,8 +1404,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             break
 
     if copy_mode and copy_pair:
-        from .util import ilog
-
         from_id, to_id = copy_pair
         from_id = int(from_id)
         to_id = int(to_id)
@@ -1418,49 +1504,66 @@ def main(argv: Optional[List[str]] = None) -> None:
                     css_text = css_text2
                     set_custom_css(obj, css_key, css_text)
 
-    if getattr(args, 'clear_tile_css', None) is not None:
-        from .util import ilog
-        from .css_ops import find_standalone_comment_tile_refs
+    if getattr(args, "clear_tile_css", None) is not None:
+        spec = str(getattr(args, "clear_tile_css"))
 
-        tid = int(getattr(args, 'clear_tile_css'))
         if css_key is None:
             die("--clear_css requires a JSON object input that can contain customCSS (full/minimal).")
-        existing_ids = {as_int(t, 'id') for t in tiles if t.get('id') is not None}
-        if tid not in existing_ids:
-            die(f"--clear_css: tile id {tid} not found in layout.")
+
+        existing_ids = {as_int(t, "id") for t in tiles if t.get("id") is not None}
+        if not existing_ids:
+            die("--clear_css: no tile ids found in layout.")
+
+        # Parse using the same syntax as --prune:ids (comma list, ranges, comparisons).
+        # Comparisons are bounded to the highest tile id present in the current layout.
+        matched = parse_prune_id_spec(spec, tiles, op_label="--clear_css")
+        target_ids = sorted(int(i) for i in matched if int(i) in existing_ids)
+
+        if not target_ids:
+            die(f"--clear_css: SPEC matched no tile ids in layout: {spec!r}")
 
         css_text = css_text or ""
-        css_text2 = cleanup_css_for_tile_ids(css_text, [tid])
 
-        # Optionally remove or rewrite standalone comments referencing this tile.
-        hits = find_standalone_comment_tile_refs(css_text2, {tid})
-        if hits:
-            remove_comments = prompt_yes_no(
-                args.force,
-                f"Also remove {len(hits)} standalone CSS comment(s) referencing tile-{tid}?",
-                default_yes=False,
-            )
-            css_text3, removed_cnt, rewritten_cnt = process_standalone_comments_for_css_cleared_tiles(
-                css_text2,
-                [tid],
-                remove=remove_comments,
-            )
-            if removed_cnt or rewritten_cnt:
-                css_text2 = css_text3
-                if args.verbose or args.debug:
-                    ilog(f"CSS comments: removed {removed_cnt} standalone comment(s), rewritten {rewritten_cnt} comment(s).")
-
-        if css_text2 != css_text:
-            css_text = css_text2
-            set_custom_css(obj, css_key, css_text)
-        else:
+        # Fast exit: if none of the targets have selector rules, there is nothing to clear.
+        if not any(tile_has_selector_rules(css_text, tid) for tid in target_ids):
             if not args.quiet:
-                ilog(f"--clear_css: no selector rules found for tile-{tid}; no changes.")
+                ilog(f"--clear_css: no selector rules found for {len(target_ids)} tile id(s); no changes.")
+        else:
+            css_text2 = cleanup_css_for_tile_ids(css_text, target_ids)
+
+            # Optionally remove or rewrite standalone comments referencing these tile id(s).
+            hits = find_standalone_comment_tile_refs(css_text2, set(target_ids))
+            if hits:
+                remove_comments = prompt_yes_no(
+                    args.force,
+                    f"Also remove {len(hits)} standalone CSS comment(s) referencing the cleared tile id(s)?",
+                    default_yes=False,
+                )
+                css_text3, removed_cnt, rewritten_cnt = process_standalone_comments_for_css_cleared_tiles(
+                    css_text2,
+                    target_ids,
+                    remove=remove_comments,
+                )
+                if removed_cnt or rewritten_cnt:
+                    css_text2 = css_text3
+                    if args.verbose or args.debug:
+                        ilog(
+                            f"CSS comments: removed {removed_cnt} standalone comment(s), "
+                            f"rewritten {rewritten_cnt} comment(s)."
+                        )
+
+            if css_text2 != css_text:
+                css_text = css_text2
+                set_custom_css(obj, css_key, css_text)
+            else:
+                if not args.quiet:
+                    ilog("--clear_css: no changes.")
+
+
 
     if args.cleanup_css and css_key is not None and css_text and (deleted_ids or cleared_ids):
-        from .util import format_id_sample, prompt_yes_no_or_die
-        from .util import ilog, prompt_yes_no
-        from .css_ops import find_standalone_comment_tile_refs, process_standalone_comments_for_removed_tiles
+# #         from .util import format_id_sample, prompt_yes_no_or_die  # removed: avoid local binding  # removed: avoid local binding
+        from .css_ops import process_standalone_comments_for_removed_tiles
 
         ids_to_clean = deleted_ids + cleared_ids
         details = f"--cleanup_css will remove CSS rules for {len(ids_to_clean)} tile id(s). IDs: {format_id_sample(ids_to_clean)}"
@@ -1583,7 +1686,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 no_scale=no_scale,
             ),
             end="",
-            file=_sys.stderr,
+            file=sys.stderr,
         )
     # CSS orphan detection / scrub (performed last, after sorting).
     if css_key is not None:
@@ -1592,7 +1695,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         existing_ids = {as_int(t, "id") for t in final_tiles}
         orphans = orphan_tile_ids_in_css(css_text2, existing_ids) if css_text2 else set()
         if orphans and args.scrub_css:
-            from .util import format_id_sample, prompt_yes_no_or_die
+# #             from .util import format_id_sample, prompt_yes_no_or_die  # removed: avoid local binding  # removed: avoid local binding
 
             prompt_yes_no_or_die(
                 args.force,
@@ -1602,7 +1705,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             css_text2 = cleanup_css_for_tile_ids(css_text2, list(orphans))
             set_custom_css(obj, css_key, css_text2)
         elif orphans and not args.quiet:
-            from .util import wlog, format_id_sample
+#             from .util import wlog, format_id_sample  # removed: avoid local binding
 
             wlog(
                 f"Found {len(orphans)} orphan CSS tile id(s) in customCSS (no matching tile). "
@@ -1644,7 +1747,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                         no_scale=no_scale,
                     ),
                     end="",
-                    file=_sys.stderr,
+                    file=sys.stderr,
                 )
             die(
                 f"Overlapping tiles detected in result: id={id1} overlaps id={id2} at r{orect[0]}..{orect[1]},c{orect[2]}..{orect[3]}. "
@@ -1682,7 +1785,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Optional: write changes first, then prompt to keep; if not kept, restore the backup to the same outputs.
     if args.confirm_keep and (not args.undo_last):
-        from .util import prompt_yes_no
+#         from .util import prompt_yes_no  # removed: avoid local binding
 
         # --confirm_keep must be independent of --force. Users may use --force to suppress
         # destructive-action prompts while still wanting the final keep/rollback confirmation.
