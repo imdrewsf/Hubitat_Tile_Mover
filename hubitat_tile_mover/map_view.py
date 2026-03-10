@@ -45,6 +45,7 @@ def render_tile_map(
     mark_color: str = 'orange',
     focus_color: str = 'red',
     no_scale: bool = False,
+    show_ids: bool = False,
 ) -> str:
     """
     Render a small ASCII minimap of tiles to stderr-friendly text.
@@ -174,17 +175,127 @@ def render_tile_map(
             return _c("38;5;208;1", "█") if mark_color == 'orange' else _c("33;1", "█")
         return _c("33;1", "█") if focus_color == 'yellow' else _c("31;1", "█")  # conflict
 
+    def _group_name(idx: int) -> str:
+        idx += 1
+        parts: List[str] = []
+        while idx > 0:
+            idx, rem = divmod(idx - 1, 26)
+            parts.append(chr(ord('A') + rem))
+        return ''.join(reversed(parts))
+
     header = (
         f"{title}\n"
         f"Bounds: rows {br1}..{br2}, cols {bc1}..{bc2} | tiles: {len(tiles)}\n"
         f"Legend: {_c('90','█')} tile  {_c('32;1','█')} changed  "
         f"{(_c('38;5;208;1','█') + ' affected  ') if mark_rects else ''}"
-        f"{(_c('33;1','█') if focus_color=='yellow' else _c('31;1','█'))} conflict  · empty\n"
+        f"{(_c('33;1','█') if focus_color=='yellow' else _c('31;1','█'))} conflict  · empty"
+        f"{'  ids shown' if show_ids else ''}\n"
     )
+
+    overlays_by_row: Dict[int, List[Dict[str, Any]]] = {}
+    group_lines: List[str] = []
+    if show_ids:
+        placements: List[Dict[str, Any]] = []
+        for t in tiles:
+            tid = t.get('id')
+            if tid is None:
+                continue
+            r1, r2, c1, c2 = rect(t)
+            r1 = max(r1, br1); r2 = min(r2, br2)
+            c1 = max(c1, bc1); c2 = min(c2, bc2)
+            if r2 < r1 or c2 < c1:
+                continue
+            y1, x1 = to_xy(r1, c1)
+            y2, x2 = to_xy(r2, c2)
+            ymin, ymax = min(y1, y2), max(y1, y2)
+            xmin, xmax = min(x1, x2), max(x1, x2)
+            label = str(tid)
+            row = (ymin + ymax) // 2
+            center_x = (xmin + xmax) // 2
+            start = center_x - (len(label) // 2)
+            start = max(0, min(start, max(0, w - len(label))))
+            placements.append({
+                'tile_id': int(tid),
+                'label': label,
+                'row': row,
+                'start': start,
+                'end': start + len(label) - 1,
+                'center_x': center_x,
+            })
+
+        parents = list(range(len(placements)))
+
+        def find(i: int) -> int:
+            while parents[i] != i:
+                parents[i] = parents[parents[i]]
+                i = parents[i]
+            return i
+
+        def union(a: int, b: int) -> None:
+            ra = find(a)
+            rb = find(b)
+            if ra != rb:
+                parents[rb] = ra
+
+        for i in range(len(placements)):
+            pi = placements[i]
+            for j in range(i + 1, len(placements)):
+                pj = placements[j]
+                if pi['row'] != pj['row']:
+                    continue
+                if pi['end'] < pj['start'] or pj['end'] < pi['start']:
+                    continue
+                union(i, j)
+
+        clusters: Dict[int, List[int]] = {}
+        for i in range(len(placements)):
+            clusters.setdefault(find(i), []).append(i)
+
+        group_counter = 0
+        for _, members in sorted(clusters.items(), key=lambda kv: min(placements[i]['row'] for i in kv[1])):
+            if len(members) == 1:
+                p = placements[members[0]]
+                overlays_by_row.setdefault(p['row'], []).append({'start': p['start'], 'text': p['label']})
+                continue
+            tag = f"Grp-{_group_name(group_counter)}"
+            group_counter += 1
+            member_tiles = sorted(placements[i]['tile_id'] for i in members)
+            center_x = sum(placements[i]['center_x'] for i in members) // len(members)
+            start = center_x - (len(tag) // 2)
+            start = max(0, min(start, max(0, w - len(tag))))
+            row = min(placements[i]['row'] for i in members)
+            overlays_by_row.setdefault(row, []).append({'start': start, 'text': tag})
+            group_lines.append(f"  {tag}: " + ", ".join(f"tile-{tid}" for tid in member_tiles))
+
+        for row_items in overlays_by_row.values():
+            row_items.sort(key=lambda item: (item['start'], len(item['text'])))
+
     body_lines = [top]
-    for row in grid:
-        body_lines.append("│" + "".join(cell_char(v) for v in row) + "│")
+    for y, row in enumerate(grid):
+        cells = [cell_char(v) for v in row]
+        if show_ids:
+            occupied = [False] * w
+            for item in overlays_by_row.get(y, []):
+                text = item['text']
+                start = int(item['start'])
+                if start < 0:
+                    text = text[-start:]
+                    start = 0
+                if start >= w or not text:
+                    continue
+                if start + len(text) > w:
+                    text = text[: w - start]
+                for idx, ch in enumerate(text):
+                    pos = start + idx
+                    if occupied[pos]:
+                        continue
+                    cells[pos] = ch
+                    occupied[pos] = True
+        body_lines.append("│" + "".join(cells) + "│")
     body_lines.append(bot)
+    if group_lines:
+        body_lines.append('Groups:')
+        body_lines.extend(group_lines)
     return header + "\n".join(body_lines) + "\n"
 
 

@@ -24,6 +24,7 @@ def _safe_stdout_write(text: str) -> None:
 
 
 
+
 class _SpacingAddModeAction(argparse.Action):
     """Stores (mode, signed_cells) where mode is rows|cols|all derived from option string."""
 
@@ -33,9 +34,10 @@ class _SpacingAddModeAction(argparse.Action):
             mode = option_string.split(":", 1)[1]
         try:
             cells = int(values)
-        except Exception:
+        except ValueError:
             raise argparse.ArgumentTypeError(f"Expected integer, got: {values!r}")
         setattr(namespace, self.dest, (mode, cells))
+
 # Short help formatting notes (0.9.98):
 # - Removed user-facing JSON formatting/shape details.
 # - Added blank lines between layout action groups for readability.
@@ -58,10 +60,8 @@ Output destinations (repeatable; default is clipboard if none specified):
 Layout actions (at most ONE per run):
   Insert:   --insert:rows COUNT AT_ROW
             --insert:cols COUNT AT_COL
-
-  Spacing:  --spacing_add:rows CELLS  |  --spacing_add:cols CELLS  |  --spacing_add:all CELLS
-            --spacing_set:rows GAP    |  --spacing_set:cols GAP    |  --spacing_set:all GAP
-
+  Spacing:  --spacing_add:rows CELLS  |  --spacing_add:cols CELLS  |  --spacing_add:all CELLS   (CELLS may be negative; gaps clamp at 0)
+            --spacing_set:rows GAP    |  --spacing_set:cols GAP    |  --spacing_set:all GAP     (GAP must be >= 0)
   Move:     --move:cols START END DEST
             --move:rows START END DEST
             --move:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
@@ -105,6 +105,7 @@ Additional actions (may be combined with the single layout action):
 
 Modifiers:
   --include_overlap
+  --no_overlap                    (spacing_set only; global un-overlap; cannot be combined with --include_overlap)
   --row_range <start> <end>         (insert_cols only)
   --col_range <start> <end>         (insert_rows only)
   --allow_overlap / --skip_overlap  (move/copy/merge)
@@ -119,6 +120,7 @@ Hubitat direct mode:
 
 Maps:
   --show_map[:full|:conflicts|:no_scale]
+  --show_ids                          (label tile ids on maps; group overlapping labels below map)
 
 More help:
   --help_full
@@ -282,6 +284,7 @@ ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
     --show_map:full            (print BEFORE / OUTCOME maps; default)
     --show_map:conflicts       (focus maps on affected/conflicting region)
     --show_map:no_scale        (no scaling; 1 row/col = 1 character)
+    --show_ids                 (label tile ids on maps; overlapping/colliding labels become Grp-A, Grp-B, ... with a list below the map)
     Note: Show map can be used without an action to display the current layout of the import dashboard.
 
 MODIFIERS
@@ -356,6 +359,7 @@ DIAGNOSTICS
 
 
 
+
 class _SpacingSetModeAction(argparse.Action):
     """Stores (mode, gap) where mode is rows|cols|all derived from option string.
 
@@ -374,16 +378,6 @@ class _SpacingSetModeAction(argparse.Action):
             raise argparse.ArgumentTypeError(f"Expected non-negative integer, got: {values!r}")
         setattr(namespace, self.dest, (mode, gap))
 
-    def __call__(self, parser, namespace, values, option_string=None):
-        mode = "all"
-        if option_string and ":" in option_string:
-            mode = option_string.split(":", 1)[1]
-        try:
-            gap = int(values)
-        except ValueError:
-            raise argparse.ArgumentTypeError(f"Expected integer, got: {values!r}")
-            if gap < 0:
-                raise argparse.ArgumentTypeError(f"Expected non-negative integer, got: {values!r}")
 class TileSorterArgumentParser(argparse.ArgumentParser):
     def format_help(self) -> str:
         # Default help is slim; use --help_full for the expanded help text.
@@ -880,6 +874,7 @@ def build_parser() -> argparse.ArgumentParser:
     diag_grp.add_argument("--show_map:full", dest="show_map_mode", action="store_const", const="full", help="Show BEFORE/AFTER ASCII layout maps in the terminal")
     diag_grp.add_argument("--show_map:conflicts", dest="show_map_mode", action="store_const", const="conflict", help="Focus maps on affected/conflicting region")
     diag_grp.add_argument("--show_map:no_scale", dest="show_map_mode", action="store_const", const="no_scale", help="Show maps unscaled (1 row/col = 1 character)")
+    diag_grp.add_argument("--show_ids", "--show-ids", action="store_true", help="Show tile ids on ASCII maps; colliding labels are grouped below the map")
 
     diag_grp.add_argument(
         "--map_focus",

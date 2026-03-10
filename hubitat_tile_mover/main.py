@@ -4,7 +4,7 @@ import os
 import sys
 from typing import Dict, List, Optional, Tuple
 
-from .util import ilog, prompt_yes_no, prompt_yes_no_or_die, format_id_sample, ok, warn, layout_fingerprint
+from .util import die, ilog, prompt_yes_no, prompt_yes_no_or_die, format_id_sample, ok, warn, wlog, layout_fingerprint
 
 def vlog(enabled: bool, msg: str) -> None:
     """Verbose logger."""
@@ -532,6 +532,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     if map_focus is None:
         map_focus = 'full'
     no_scale = (map_focus == 'no_scale')
+    show_ids = bool(getattr(args, 'show_ids', False))
+    if show_ids and not show_map:
+        die("--show_ids requires --show_map.")
 
     # --undo_last is a standalone restore action.
     # It restores the previous backup and writes it to the last output destinations unless --output/--output_to is provided.
@@ -961,6 +964,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 mark_rects=before_mark_rects,
                 bounds_rects=bounds_rects,
                 no_scale=no_scale,
+                show_ids=show_ids,
             ),
             end='',
             file=sys.stderr,
@@ -1676,6 +1680,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                         conflict_rects.append((or1, or2, oc1, oc2))
 
         focus_color = "yellow" if getattr(args, "allow_overlap", False) else "red"
+        outcome_no_scale = no_scale or bool(conflict_rects)
         print(
             render_tile_map(
                 final_tiles,
@@ -1683,7 +1688,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                 changed_ids=changed_ids,
                 focus_rects=conflict_rects,
                 focus_color=focus_color,
-                no_scale=no_scale,
+                no_scale=outcome_no_scale,
+                show_ids=show_ids,
             ),
             end="",
             file=sys.stderr,
@@ -1744,7 +1750,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                         title="CONFLICT MAP (OUTCOME)",
                         focus_rects=[orect],
                         focus_color="red",
-                        no_scale=no_scale,
+                        no_scale=True,
+                        show_ids=show_ids,
                     ),
                     end="",
                     file=sys.stderr,

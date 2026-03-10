@@ -91,7 +91,7 @@ def _conflict_scan_and_append(
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
                         highlight_rects=hi_rects,
-                        no_scale=(map_focus == 'no_scale'),
+                        no_scale=True,
                     ),
                     end='',
                 )
