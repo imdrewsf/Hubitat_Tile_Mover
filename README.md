@@ -105,6 +105,7 @@
 * <b>[VISUAL MAPS](#visual-layout-maps)</b> Easily see proposed changes, tile-ids, potential conflicts and final outcome of actions
 
 ![multimap](https://github.com/user-attachments/assets/547d6dc4-8ab6-4d50-817c-17b7efb767cb)
+![spacing_sample](https://github.com/user-attachments/assets/76d46a83-c2ea-4d34-be50-50571bd057e1)
 
 ---
 
