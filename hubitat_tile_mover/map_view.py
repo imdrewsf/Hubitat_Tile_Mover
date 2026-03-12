@@ -46,6 +46,7 @@ def render_tile_map(
     focus_color: str = 'red',
     no_scale: bool = False,
     show_ids: bool = False,
+    show_axes: str = 'none',
 ) -> str:
     """
     Render a small ASCII minimap of tiles to stderr-friendly text.
@@ -189,7 +190,8 @@ def render_tile_map(
         f"Legend: {_c('90','█')} tile  {_c('32;1','█')} changed  "
         f"{(_c('38;5;208;1','█') + ' affected  ') if mark_rects else ''}"
         f"{(_c('33;1','█') if focus_color=='yellow' else _c('31;1','█'))} conflict  · empty"
-        f"{'  ids shown' if show_ids else ''}\n"
+        f"{'  ids shown' if show_ids else ''}"
+        f"{'  axes=' + show_axes if show_axes != 'none' else ''}\n"
     )
 
     overlays_by_row: Dict[int, List[Dict[str, Any]]] = {}
@@ -255,28 +257,65 @@ def render_tile_map(
         for _, members in sorted(clusters.items(), key=lambda kv: min(placements[i]['row'] for i in kv[1])):
             if len(members) == 1:
                 p = placements[members[0]]
-                overlays_by_row.setdefault(p['row'], []).append({'start': p['start'], 'text': p['label']})
+                overlays_by_row.setdefault(p['row'], []).append({'start': p['start'], 'text': p['label'], 'bold': False})
                 continue
-            tag = f"Grp-{_group_name(group_counter)}"
+            tag = _group_name(group_counter)
             group_counter += 1
             member_tiles = sorted(placements[i]['tile_id'] for i in members)
             center_x = sum(placements[i]['center_x'] for i in members) // len(members)
             start = center_x - (len(tag) // 2)
             start = max(0, min(start, max(0, w - len(tag))))
             row = min(placements[i]['row'] for i in members)
-            overlays_by_row.setdefault(row, []).append({'start': start, 'text': tag})
+            overlays_by_row.setdefault(row, []).append({'start': start, 'text': tag, 'bold': True})
             group_lines.append(f"  {tag}: " + ", ".join(f"tile-{tid}" for tid in member_tiles))
 
         for row_items in overlays_by_row.values():
             row_items.sort(key=lambda item: (item['start'], len(item['text'])))
 
-    body_lines = [top]
+    def axis_col_value(x: int) -> int:
+        if no_scale:
+            return bc1 + x
+        return bc1 + int(round(x * max(1, cols - 1) / max(1, w - 1)))
+
+    def axis_row_value(y: int) -> int:
+        if no_scale:
+            return br1 + y
+        return br1 + int(round(y * max(1, rows - 1) / max(1, h - 1)))
+
+    show_row_axes = show_axes in ('row', 'all')
+    show_col_axes = show_axes in ('col', 'all')
+    row_label_width = max(len(str(br1)), len(str(br2))) if show_row_axes else 0
+
+    body_lines: List[str] = []
+    if show_col_axes:
+        prefix = (' ' * row_label_width + ' ') if show_row_axes else ''
+        axis = [' ' for _ in range(w)]
+        step = 1 if no_scale else max(1, cols // 8)
+        last_end = -999
+        for x in range(w):
+            value = axis_col_value(x)
+            if x not in (0, w - 1) and ((value - bc1) % step != 0):
+                continue
+            txt = str(value)
+            start = max(0, min(x - (len(txt) // 2), w - len(txt)))
+            if start <= last_end and x not in (0, w - 1):
+                continue
+            for i, ch in enumerate(txt):
+                axis[start + i] = ch
+            last_end = start + len(txt) - 1
+        body_lines.append(prefix + ' ' + ''.join(axis))
+
+    top_line = top
+    if show_row_axes:
+        top_line = (' ' * row_label_width) + ' ' + top_line
+    body_lines.append(top_line)
     for y, row in enumerate(grid):
         cells = [cell_char(v) for v in row]
         if show_ids:
             occupied = [False] * w
             for item in overlays_by_row.get(y, []):
                 text = item['text']
+                bold = bool(item.get('bold', False))
                 start = int(item['start'])
                 if start < 0:
                     text = text[-start:]
@@ -289,10 +328,16 @@ def render_tile_map(
                     pos = start + idx
                     if occupied[pos]:
                         continue
-                    cells[pos] = ch
+                    cells[pos] = _c('1', ch) if bold else ch
                     occupied[pos] = True
-        body_lines.append("│" + "".join(cells) + "│")
-    body_lines.append(bot)
+        line = "│" + "".join(cells) + "│"
+        if show_row_axes:
+            line = str(axis_row_value(y)).rjust(row_label_width) + ' ' + line
+        body_lines.append(line)
+    bot_line = bot
+    if show_row_axes:
+        bot_line = (' ' * row_label_width) + ' ' + bot_line
+    body_lines.append(bot_line)
     if group_lines:
         body_lines.append('Groups:')
         body_lines.extend(group_lines)

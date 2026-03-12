@@ -73,6 +73,7 @@ def crop_to_rows(
     debug: bool,
     show_map: bool = False,
     map_focus: str = 'full',
+    show_axes: str = 'none',
 ) -> List[int]:
     if start_row <= 0 or end_row <= 0:
         _die("--crop_to_rows values must be positive (1-based).")
@@ -128,6 +129,7 @@ def crop_to_cols(
     debug: bool,
     show_map: bool = False,
     map_focus: str = 'full',
+    show_axes: str = 'none',
 ) -> List[int]:
     if start_col <= 0 or end_col <= 0:
         _die("--crop_to_cols values must be positive (1-based).")
@@ -182,6 +184,7 @@ def crop_to_range(
     debug: bool,
     show_map: bool = False,
     map_focus: str = 'full',
+    show_axes: str = 'none',
 ) -> List[int]:
     if min(top_row, left_col, bottom_row, right_col) <= 0:
         _die("--crop_to_range values must be positive (1-based).")

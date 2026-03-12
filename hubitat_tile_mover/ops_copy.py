@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys as _sys
 import copy
 from typing import Any, Dict, List, Optional, Set
 
@@ -8,6 +9,7 @@ from .selectors import select_tiles_by_col_range, select_tiles_by_row_range, sel
 from .tiles import as_int, rect, set_int_like
 from .util import die, dlog, vlog
 from .map_view import render_tile_map, conflict_rects_from_details
+from .list_views import render_abort_conflicts
 
 def _next_id_state(dest_tiles: List[Dict[str, Any]], *, reserved_ids: Optional[Set[int]] = None) -> tuple[set[int], int]:
     used = {as_int(t, "id") for t in dest_tiles}
@@ -36,6 +38,8 @@ def _conflict_scan_and_append(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
+    show_axes: str = 'none',
+    show_ids: bool = False,
     verbose: bool,
     debug: bool,
     label: str,
@@ -56,27 +60,28 @@ def _conflict_scan_and_append(
         if show_map:
             focus = conflict_rects_from_details(conflicts_by_mid)
             try:
-                focus_arg = focus if map_focus == 'conflict' else None
-                tiles_for_map = dest_tiles if (map_focus == 'full' or map_focus == 'no_scale') else (stationary + copies)
-                # Conflict map: gray=stationary, green=moving/copied (non-conflict), red=conflict
-                tiles_for_map = stationary
-                hi_rects = [rect(t) for t in copies]
+                projected_ids = {as_int(t, 'id') for t in copies if t.get('id') is not None}
                 full_like = (map_focus == 'full' or map_focus == 'no_scale')
-                bounds_rects = [rect(t) for t in dest_tiles] if full_like else (focus if map_focus == 'conflict' else None)
+                bounds_rects = [rect(t) for t in dest_tiles] + [rect(t) for t in copies] if full_like else focus
                 print(
                     render_tile_map(
-                        tiles_for_map,
+                        stationary + copies,
                         title='CONFLICT MAP',
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
-                        highlight_rects=hi_rects,
+                        changed_ids=projected_ids,
                         no_scale=True,
+                        show_ids=show_ids,
+                        show_axes=show_axes,
                     ),
                     end='',
+                    file=_sys.stderr,
                 )
             except Exception:
                 pass
-        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
+        detail_level = 'diagnostic' if debug else ('legacy' if verbose else 'summary')
+        report = render_abort_conflicts(copies, stationary, conflicts_by_mid, action_word='copy', detail_level=detail_level)
+        die(report.rstrip())
 
     added = 0
     appended_ids: Set[int] = set()
@@ -104,6 +109,8 @@ def copy_cols(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
+    show_axes: str = 'none',
+    show_ids: bool = False,
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -148,6 +155,8 @@ def copy_cols(
         label="copy_cols",
         show_map=show_map,
         map_focus=map_focus,
+        show_axes=show_axes,
+        show_ids=show_ids,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}
@@ -163,6 +172,8 @@ def copy_rows(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
+    show_axes: str = 'none',
+    show_ids: bool = False,
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -207,6 +218,8 @@ def copy_rows(
         label="copy_rows",
         show_map=show_map,
         map_focus=map_focus,
+        show_axes=show_axes,
+        show_ids=show_ids,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}
@@ -225,6 +238,8 @@ def copy_range(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
+    show_axes: str = 'none',
+    show_ids: bool = False,
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -281,6 +296,8 @@ def copy_range(
         label="copy_range",
         show_map=show_map,
         map_focus=map_focus,
+        show_axes=show_axes,
+        show_ids=show_ids,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}

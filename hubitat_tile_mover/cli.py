@@ -55,7 +55,7 @@ Output destinations (repeatable; default is clipboard if none specified):
   --output:terminal
   --output:clipboard
   --output:file <filename>
-  --output:hub [dashboard_url]       (FULL input only; URL optional if importing from hub)
+  --output:hub [dashboard_url]       (FULL input only; URL optional if importing from hub; not valid with --list_tiles)
 
 Layout actions (at most ONE per run):
   Insert:   --insert:rows COUNT AT_ROW
@@ -121,6 +121,10 @@ Hubitat direct mode:
 Maps:
   --show_map[:full|:conflicts|:no_scale]
   --show_ids                          (label tile ids on maps; group overlapping labels below map)
+  --show_axis:row|col|all             (show real row/col numbers on map edges)
+
+Tile reports:
+  --list_tiles:<type>[:<keys>]        (standalone tile report; plain keys: i,r,c,h,w,p,d,t,s; prefix key with - for descending)
 
 More help:
   --help_full
@@ -138,7 +142,7 @@ Output destinations (repeatable; default is clipboard if none specified):
   --output:terminal
   --output:clipboard
   --output:file <filename>
-  --output:hub [dashboard_url] (URL optional if importing from hub)
+  --output:hub [dashboard_url] (URL optional if importing from hub; not valid with --list_tiles)
 
 Undo Actions (from output saved directly to hub)
   --undo_last (restores changes saved to hub by previous run)
@@ -875,6 +879,15 @@ def build_parser() -> argparse.ArgumentParser:
     diag_grp.add_argument("--show_map:conflicts", dest="show_map_mode", action="store_const", const="conflict", help="Focus maps on affected/conflicting region")
     diag_grp.add_argument("--show_map:no_scale", dest="show_map_mode", action="store_const", const="no_scale", help="Show maps unscaled (1 row/col = 1 character)")
     diag_grp.add_argument("--show_ids", "--show-ids", action="store_true", help="Show tile ids on ASCII maps; colliding labels are grouped below the map")
+    diag_grp.add_argument("--show_axis:row", dest="show_axes", action="store_const", const="row", help="Show row numbers on the left edge of ASCII maps")
+    diag_grp.add_argument("--show_axis:col", dest="show_axes", action="store_const", const="col", help="Show column numbers along the top edge of ASCII maps")
+    diag_grp.add_argument("--show_axis:all", dest="show_axes", action="store_const", const="all", help="Show both row and column numbers on ASCII maps")
+    diag_grp.add_argument("--show_axis:both", dest="show_axes", action="store_const", const="all", help=argparse.SUPPRESS)
+    diag_grp.add_argument("--show_axes:row", dest="show_axes", action="store_const", const="row", help=argparse.SUPPRESS)
+    diag_grp.add_argument("--show_axes:col", dest="show_axes", action="store_const", const="col", help=argparse.SUPPRESS)
+    diag_grp.add_argument("--show_axes:all", dest="show_axes", action="store_const", const="all", help=argparse.SUPPRESS)
+    diag_grp.add_argument("--show_axes:both", dest="show_axes", action="store_const", const="all", help=argparse.SUPPRESS)
+    diag_grp.add_argument("--list_tiles", dest="list_tiles", nargs="?", const="plain:rci", metavar="TYPE[:SPEC]", help="Standalone tile report action: plain, tree, overlap, nested, conflicts (plain keys: i,r,c,h,w,p,d,t,s; prefix key with - for descending)")
 
     diag_grp.add_argument(
         "--map_focus",

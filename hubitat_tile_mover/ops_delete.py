@@ -27,6 +27,7 @@ def delete_rows(
     debug: bool,
     show_map: bool = False,
     map_focus: str = 'full',
+    show_axes: str = 'none',
 ) -> List[int]:
     if start_row <= 0 or end_row <= 0:
         _die("--delete_rows values must be positive (1-based).")
@@ -69,6 +70,7 @@ def delete_rows(
                     mark_rects=mark_rects,
                     bounds_rects=bounds_rects,
                     no_scale=(map_focus == 'no_scale'),
+                    show_axes=show_axes,
                 ),
                 end="",
                 file=_sys.stderr,
@@ -115,6 +117,7 @@ def delete_cols(
     debug: bool,
     show_map: bool = False,
     map_focus: str = 'full',
+    show_axes: str = 'none',
 ) -> List[int]:
     if start_col <= 0 or end_col <= 0:
         _die("--delete_cols values must be positive (1-based).")
@@ -157,6 +160,7 @@ def delete_cols(
                     mark_rects=mark_rects,
                     bounds_rects=bounds_rects,
                     no_scale=(map_focus == 'no_scale'),
+                    show_axes=show_axes,
                 ),
                 end="",
                 file=_sys.stderr,
