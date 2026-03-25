@@ -124,10 +124,10 @@ Maps:
   --show_axis:row|col|all             (show real row/col numbers on map edges)
 
 Tile reports:
-  --list_tiles:<type>[:<keys>]        (standalone tile report; plain keys: i,r,c,h,w,p,d,t,s; prefix key with - for descending)
+  --list_tiles:<type>[:<keys>]        (standalone tile report; types: plain, tree, overlap, nested, conflicts)
 
 More help:
-  --help_full
+  --help:full
   --version
 '''
 
@@ -384,7 +384,7 @@ class _SpacingSetModeAction(argparse.Action):
 
 class TileSorterArgumentParser(argparse.ArgumentParser):
     def format_help(self) -> str:
-        # Default help is slim; use --help_full for the expanded help text.
+        # Default help is slim; use --help:full for the expanded help text.
         return SHORT_HELP + "\n"
 
     def error(self, message: str) -> None:
@@ -457,7 +457,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print build version and exit.",
     )
 
-    p.add_argument("--help_full", action=HelpFullAction, nargs=0, help="(see --help_full for details)")
+    p.add_argument("--help:full", "--help_full", action=HelpFullAction, nargs=0, help="(see --help:full for details)")
 
     # Keep argument groups for internal structure (even though custom help is printed).
     io_grp = p.add_argument_group("Import / Output")
@@ -482,7 +482,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         metavar=("KIND", "PATH"),
         default=None,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     io_grp.add_argument(
         "--output_to",
@@ -492,7 +492,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         metavar=("DEST", "ARG"),
         default=None,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     io_grp.add_argument(
         "--output_format",
@@ -524,7 +524,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=2,
         metavar=("COUNT", "AT_ROW"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--insert:cols",
@@ -536,7 +536,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=2,
         metavar=("COUNT", "AT_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
 
 
@@ -546,21 +546,21 @@ def build_parser() -> argparse.ArgumentParser:
         dest="spacing_add",
         metavar="CELLS",
         action=_SpacingAddModeAction,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--spacing_add:cols",
         dest="spacing_add",
         metavar="CELLS",
         action=_SpacingAddModeAction,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--spacing_add:all",
         dest="spacing_add",
         metavar="CELLS",
         action=_SpacingAddModeAction,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
 
 
@@ -569,21 +569,21 @@ def build_parser() -> argparse.ArgumentParser:
         dest="spacing_set",
         metavar="GAP",
         action=_SpacingSetModeAction,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--spacing_set:cols",
         dest="spacing_set",
         metavar="GAP",
         action=_SpacingSetModeAction,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--spacing_set:all",
         dest="spacing_set",
         metavar="GAP",
         action=_SpacingSetModeAction,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--move:cols",
@@ -595,7 +595,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=3,
         metavar=("START_COL", "END_COL", "DEST_START_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--move:rows",
@@ -605,7 +605,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=3,
         metavar=("START_ROW", "END_ROW", "DEST_START_ROW"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--move:range",
@@ -615,7 +615,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=6,
         metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
 
     ops.add_argument(
@@ -626,7 +626,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=3,
         metavar=("START_COL", "END_COL", "DEST_START_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--copy:rows",
@@ -636,7 +636,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=3,
         metavar=("START_ROW", "END_ROW", "DEST_START_ROW"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--copy:range",
@@ -646,7 +646,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=6,
         metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
 
     ops.add_argument(
@@ -657,7 +657,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=3,
         metavar=("START_COL", "END_COL", "DEST_START_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--merge:rows",
@@ -667,7 +667,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=3,
         metavar=("START_ROW", "END_ROW", "DEST_START_ROW"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--merge:range",
@@ -677,7 +677,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=6,
         metavar=("SRC_TOP_ROW", "SRC_LEFT_COL", "SRC_BOTTOM_ROW", "SRC_RIGHT_COL", "DEST_TOP_ROW", "DEST_LEFT_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
 
     ops.add_argument(
@@ -688,7 +688,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=2,
         metavar=("START_ROW", "END_ROW"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--delete:cols",
@@ -700,7 +700,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=2,
         metavar=("START_COL", "END_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
 
     ops.add_argument(
@@ -711,7 +711,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=2,
         metavar=("START_ROW", "END_ROW"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--clear:cols",
@@ -723,7 +723,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=2,
         metavar=("START_COL", "END_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--clear:range",
@@ -733,7 +733,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=4,
         metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
 
     ops.add_argument(
@@ -744,7 +744,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=2,
         metavar=("START_ROW", "END_ROW"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--crop:cols",
@@ -756,7 +756,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=2,
         metavar=("START_COL", "END_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
     ops.add_argument(
         "--crop:range",
@@ -766,14 +766,14 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=4,
         metavar=("TOP_ROW", "LEFT_COL", "BOTTOM_ROW", "RIGHT_COL"),
         type=int,
-        help="(see --help_full for details)",
+        help="(see --help:full for details)",
     )
 
     # Prune specs (new preferred syntax)
-    ops.add_argument("--prune_except:ids", dest="prune_except_ids", metavar="SPEC", type=str, help="(see --help_full for details)")
-    ops.add_argument("--prune_except:devices", dest="prune_except_devices", metavar="SPEC", type=str, help="(see --help_full for details)")
-    ops.add_argument("--prune:ids", dest="prune_ids", metavar="SPEC", type=str, help="(see --help_full for details)")
-    ops.add_argument("--prune:devices", dest="prune_devices", metavar="SPEC", type=str, help="(see --help_full for details)")
+    ops.add_argument("--prune_except:ids", dest="prune_except_ids", metavar="SPEC", type=str, help="(see --help:full for details)")
+    ops.add_argument("--prune_except:devices", dest="prune_except_devices", metavar="SPEC", type=str, help="(see --help:full for details)")
+    ops.add_argument("--prune:ids", dest="prune_ids", metavar="SPEC", type=str, help="(see --help:full for details)")
+    ops.add_argument("--prune:devices", dest="prune_devices", metavar="SPEC", type=str, help="(see --help:full for details)")
 
     # Legacy aliases (accepted but not documented)
     ops.add_argument("--prune_except_ids", "--prune-except-ids", dest="prune_except_ids", metavar="SPEC", type=str, help=argparse.SUPPRESS)
@@ -835,30 +835,30 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("--clear_tile_css", "--clear-tile-css", dest="clear_tile_css", metavar="TILE_ID", type=int, help=argparse.SUPPRESS)
 
 
-    ops_grp.add_argument("--merge_source", "--merge-source", default=None, nargs='+', help="(see --help_full for details)")
+    ops_grp.add_argument("--merge_source", "--merge-source", default=None, nargs='+', help="(see --help:full for details)")
 
     filters_grp = p.add_argument_group("Filters")
-    filters_grp.add_argument("--include_overlap", "--include-overlap", action="store_true", help="(see --help_full for details)")
-    filters_grp.add_argument("--no_overlap", "--no-overlap", action="store_true", help="(see --help_full for details)")
-    filters_grp.add_argument("--col_range", "--col-range", nargs=2, metavar=("COL_START", "COL_END"), type=int, help="(see --help_full for details)")
-    filters_grp.add_argument("--row_range", "--row-range", nargs=2, metavar=("ROW_START", "ROW_END"), type=int, help="(see --help_full for details)")
+    filters_grp.add_argument("--include_overlap", "--include-overlap", action="store_true", help="(see --help:full for details)")
+    filters_grp.add_argument("--no_overlap", "--no-overlap", action="store_true", help="(see --help:full for details)")
+    filters_grp.add_argument("--col_range", "--col-range", nargs=2, metavar=("COL_START", "COL_END"), type=int, help="(see --help:full for details)")
+    filters_grp.add_argument("--row_range", "--row-range", nargs=2, metavar=("ROW_START", "ROW_END"), type=int, help="(see --help:full for details)")
 
     overlap_grp = p.add_argument_group("Overlap Policy")
     conflict = overlap_grp.add_mutually_exclusive_group(required=False)
-    conflict.add_argument("--allow_overlap", "--allow-overlap", action="store_true", help="(see --help_full for details)")
-    conflict.add_argument("--skip_overlap", "--skip-overlap", action="store_true", help="(see --help_full for details)")
+    conflict.add_argument("--allow_overlap", "--allow-overlap", action="store_true", help="(see --help:full for details)")
+    conflict.add_argument("--skip_overlap", "--skip-overlap", action="store_true", help="(see --help:full for details)")
 
     safety_grp = p.add_argument_group("Safety")
-    safety_grp.add_argument("--force", action="store_true", help="(see --help_full for details)")
+    safety_grp.add_argument("--force", action="store_true", help="(see --help:full for details)")
 
     trim_sort_grp = p.add_argument_group("Trim / Sort")
-    trim_sort_grp.add_argument("--trim", nargs="?", const="both", default=None, metavar="MODE", help="(see --help_full for details)")
-    trim_sort_grp.add_argument("--trim_left", "--trim-left", action="store_true", help="(see --help_full for details)")
-    trim_sort_grp.add_argument("--trim_top", "--trim-top", action="store_true", help="(see --help_full for details)")
+    trim_sort_grp.add_argument("--trim", nargs="?", const="both", default=None, metavar="MODE", help="(see --help:full for details)")
+    trim_sort_grp.add_argument("--trim_left", "--trim-left", action="store_true", help="(see --help:full for details)")
+    trim_sort_grp.add_argument("--trim_top", "--trim-top", action="store_true", help="(see --help:full for details)")
 
     # --sort[:SPEC] (single switch). We keep legacy --order hidden.
-    trim_sort_grp.add_argument("--sort", nargs="?", const="irc", default=None, metavar="SPEC", help="(see --help_full for details)")
-    trim_sort_grp.add_argument("--order", default=None, help="(see --help_full for details)")
+    trim_sort_grp.add_argument("--sort", nargs="?", const="irc", default=None, metavar="SPEC", help="(see --help:full for details)")
+    trim_sort_grp.add_argument("--order", default=None, help="(see --help:full for details)")
 
     css_grp = p.add_argument_group("CSS")
     css_grp.add_argument("--cleanup_css", "--cleanup-css", action="store_true", help="Remove tile-specific CSS rules for deleted/cleared tiles (best-effort)")
@@ -887,7 +887,7 @@ def build_parser() -> argparse.ArgumentParser:
     diag_grp.add_argument("--show_axes:col", dest="show_axes", action="store_const", const="col", help=argparse.SUPPRESS)
     diag_grp.add_argument("--show_axes:all", dest="show_axes", action="store_const", const="all", help=argparse.SUPPRESS)
     diag_grp.add_argument("--show_axes:both", dest="show_axes", action="store_const", const="all", help=argparse.SUPPRESS)
-    diag_grp.add_argument("--list_tiles", dest="list_tiles", nargs="?", const="plain:rci", metavar="TYPE[:SPEC]", help="Standalone tile report action: plain, tree, overlap, nested, conflicts (plain keys: i,r,c,h,w,p,d,t,s; prefix key with - for descending)")
+    diag_grp.add_argument("--list_tiles", dest="list_tiles", nargs="?", const="plain:rci", metavar="TYPE[:SPEC]", help="Standalone tile report action: plain, tree, overlap, nested, conflicts")
 
     diag_grp.add_argument(
         "--map_focus",
