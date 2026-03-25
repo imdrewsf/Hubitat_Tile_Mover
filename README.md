@@ -220,7 +220,7 @@ Sets the destination to save dashboard layout JSON after layout actions have com
   - Conflict detection is evaluated **once**, before copying / moving, against existing destination tiles only.
   - Tiles that overlap in their original position are **not** considered in conflict with each other when they are moved or copied.
 
-![Target area overlap selection diagram](assets/page_03_target-area-overlap.png)
+![Target area overlap selection diagram](Documentation/assets/page_03_target-area-overlap.png)
 
 [Back to Contents](#table-of-contents)
 
