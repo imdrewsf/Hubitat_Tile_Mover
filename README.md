@@ -588,7 +588,7 @@ Increases, decreases, or sets uniform spacing between all dashboard tiles.
 
   In this example, spacing was set to **2 rows** and **2 columns** between tiles (`--spacing:all 2`). Spaces around individual tiles *(orange circle)* increased. `--include_overlap` was not specified, so groups of tiles *(red circle)* were treated as a single tile. Space around the group was increased while maintaining the interior spacing.
 
-![Spacing example](assets/page_13_spacing-example.png)
+![Spacing example](Documentation/assets/page_13_spacing-example.png)
 
 - Tiles do not need to be uniformly sized or in straight columns or rows. However, applying uniform spacing to complex layouts with wide differences in tile sizes can lead to unpredictable outcomes.
 - Spacing between tiles will never be reduced below zero.
@@ -846,7 +846,7 @@ When using `--show_ids`, small or overlapping tiles may be represented by a grou
 - `█` *(red)* — tiles *(or portions)* in conflict that caused the action to fail
 - `█` *(yellow)* — tile conflicts allowed by `--allow_overlap`
 
-![Visual layout map examples](assets/page_20_visual-layout-map-examples.png)
+![Visual layout map examples](Documentation/assets/page_20_visual-layout-map-examples.png)
 
 <a id="dashboard-tile-lists"></a>
 
@@ -919,7 +919,7 @@ List nested tiles, sort by row, column *(descending)*, id.
 - **Template**
 - **CSS Rules** — number of rules or comments found in `customCSS` referencing that tile-id
 
-![Placement type diagram](assets/page_22_placement-type-diagram.png)
+![Placement type diagram](Documentation/assets/page_22_placement-type-diagram.png)
 
 **Notes:**
 
