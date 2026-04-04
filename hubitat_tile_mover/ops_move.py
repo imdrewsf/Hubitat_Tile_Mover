@@ -9,7 +9,6 @@ from .selectors import select_tiles_by_col_range, select_tiles_by_row_range, sel
 from .tiles import as_int, rect, set_int_like
 from .util import die, dlog, vlog
 from .map_view import render_tile_map, conflict_rects_from_details
-from .list_views import render_abort_conflicts
 
 
 def scan_move_conflicts(
@@ -52,8 +51,6 @@ def move_cols(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    show_axes: str = 'none',
-    show_ids: bool = False,
     verbose: bool,
     debug: bool,
 ) -> None:
@@ -86,45 +83,30 @@ def move_cols(
         more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
         if show_map:
             try:
-                # Conflict map (pre-flight): render stationary tiles plus projected destination tiles.
+                # Conflict map (pre-flight): gray=stationary, green=moved destination footprints, red=overlap region
                 focus = conflict_rects_from_details(conflicts_by_mid)
-                projected = []
-                projected_ids = set()
-                for mt in moving:
-                    cp = dict(mt)
-                    r1, r2, c1, c2 = moved_rect(mt)
-                    cp['row'] = r1
-                    cp['col'] = c1
-                    if 'rowSpan' in cp:
-                        cp['rowSpan'] = (r2 - r1 + 1)
-                    if 'colSpan' in cp:
-                        cp['colSpan'] = (c2 - c1 + 1)
-                    projected.append(cp)
-                    try:
-                        projected_ids.add(as_int(cp, 'id'))
-                    except Exception:
-                        pass
+                moved_rects = [moved_rect(t) for t in moving]
+                bounds_rects = None
                 full_like = (map_focus == 'full' or map_focus == 'no_scale')
-                bounds_rects = ([rect(t) for t in stationary] + [rect(t) for t in projected]) if full_like else focus
+                if full_like:
+                    bounds_rects = [rect(t) for t in stationary] + moved_rects
+                elif map_focus == 'conflict':
+                    bounds_rects = focus
                 print(
                     render_tile_map(
-                        stationary + projected,
+                        stationary,
                         title='CONFLICT MAP',
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
-                        changed_ids=projected_ids,
-                        no_scale=True,
-                        show_ids=show_ids,
-                        show_axes=show_axes,
+                        highlight_rects=moved_rects,
+                        no_scale=(map_focus == 'no_scale'),
                     ),
                     end='',
                     file=_sys.stderr,
                 )
             except Exception:
                 pass
-        detail_level = 'diagnostic' if debug else ('legacy' if verbose else 'summary')
-        report = render_abort_conflicts(moving, stationary, conflicts_by_mid, action_word='move', detail_level=detail_level)
-        die(report.rstrip())
+        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
 
     for t in moving:
         tid = as_int(t, "id")
@@ -152,8 +134,6 @@ def move_rows(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    show_axes: str = 'none',
-    show_ids: bool = False,
     verbose: bool,
     debug: bool,
 ) -> None:
@@ -186,45 +166,30 @@ def move_rows(
         more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
         if show_map:
             try:
-                # Conflict map (pre-flight): render stationary tiles plus projected destination tiles.
+                # Conflict map (pre-flight): gray=stationary, green=moved destination footprints, red=overlap region
                 focus = conflict_rects_from_details(conflicts_by_mid)
-                projected = []
-                projected_ids = set()
-                for mt in moving:
-                    cp = dict(mt)
-                    r1, r2, c1, c2 = moved_rect(mt)
-                    cp['row'] = r1
-                    cp['col'] = c1
-                    if 'rowSpan' in cp:
-                        cp['rowSpan'] = (r2 - r1 + 1)
-                    if 'colSpan' in cp:
-                        cp['colSpan'] = (c2 - c1 + 1)
-                    projected.append(cp)
-                    try:
-                        projected_ids.add(as_int(cp, 'id'))
-                    except Exception:
-                        pass
+                moved_rects = [moved_rect(t) for t in moving]
+                bounds_rects = None
                 full_like = (map_focus == 'full' or map_focus == 'no_scale')
-                bounds_rects = ([rect(t) for t in stationary] + [rect(t) for t in projected]) if full_like else focus
+                if full_like:
+                    bounds_rects = [rect(t) for t in stationary] + moved_rects
+                elif map_focus == 'conflict':
+                    bounds_rects = focus
                 print(
                     render_tile_map(
-                        stationary + projected,
+                        stationary,
                         title='CONFLICT MAP',
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
-                        changed_ids=projected_ids,
-                        no_scale=True,
-                        show_ids=show_ids,
-                        show_axes=show_axes,
+                        highlight_rects=moved_rects,
+                        no_scale=(map_focus == 'no_scale'),
                     ),
                     end='',
                     file=_sys.stderr,
                 )
             except Exception:
                 pass
-        detail_level = 'diagnostic' if debug else ('legacy' if verbose else 'summary')
-        report = render_abort_conflicts(moving, stationary, conflicts_by_mid, action_word='move', detail_level=detail_level)
-        die(report.rstrip())
+        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
 
     for t in moving:
         tid = as_int(t, "id")
@@ -255,8 +220,6 @@ def move_range(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    show_axes: str = 'none',
-    show_ids: bool = False,
     verbose: bool,
     debug: bool,
 ) -> None:
@@ -303,45 +266,30 @@ def move_range(
         more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
         if show_map:
             try:
-                # Conflict map (pre-flight): render stationary tiles plus projected destination tiles.
+                # Conflict map (pre-flight): gray=stationary, green=moved destination footprints, red=overlap region
                 focus = conflict_rects_from_details(conflicts_by_mid)
-                projected = []
-                projected_ids = set()
-                for mt in moving:
-                    cp = dict(mt)
-                    r1, r2, c1, c2 = moved_rect(mt)
-                    cp['row'] = r1
-                    cp['col'] = c1
-                    if 'rowSpan' in cp:
-                        cp['rowSpan'] = (r2 - r1 + 1)
-                    if 'colSpan' in cp:
-                        cp['colSpan'] = (c2 - c1 + 1)
-                    projected.append(cp)
-                    try:
-                        projected_ids.add(as_int(cp, 'id'))
-                    except Exception:
-                        pass
+                moved_rects = [moved_rect(t) for t in moving]
+                bounds_rects = None
                 full_like = (map_focus == 'full' or map_focus == 'no_scale')
-                bounds_rects = ([rect(t) for t in stationary] + [rect(t) for t in projected]) if full_like else focus
+                if full_like:
+                    bounds_rects = [rect(t) for t in stationary] + moved_rects
+                elif map_focus == 'conflict':
+                    bounds_rects = focus
                 print(
                     render_tile_map(
-                        stationary + projected,
+                        stationary,
                         title='CONFLICT MAP',
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
-                        changed_ids=projected_ids,
-                        no_scale=True,
-                        show_ids=show_ids,
-                        show_axes=show_axes,
+                        highlight_rects=moved_rects,
+                        no_scale=(map_focus == 'no_scale'),
                     ),
                     end='',
                     file=_sys.stderr,
                 )
             except Exception:
                 pass
-        detail_level = 'diagnostic' if debug else ('legacy' if verbose else 'summary')
-        report = render_abort_conflicts(moving, stationary, conflicts_by_mid, action_word='move', detail_level=detail_level)
-        die(report.rstrip())
+        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
 
     for t in moving:
         tid = as_int(t, "id")

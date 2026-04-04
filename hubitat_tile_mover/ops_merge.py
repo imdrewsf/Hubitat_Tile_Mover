@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys as _sys
 import copy
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -10,7 +9,6 @@ from .selectors import select_tiles_by_col_range, select_tiles_by_rect_range, se
 from .tiles import as_int, rect, set_int_like, verify_tiles_minimum
 from .util import die, dlog, vlog
 from .map_view import render_tile_map, conflict_rects_from_details
-from .list_views import render_abort_conflicts
 
 
 def _load_merge_tiles_from_file(path: str) -> List[Dict[str, Any]]:
@@ -59,8 +57,6 @@ def _conflict_scan_and_append(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    show_axes: str = 'none',
-    show_ids: bool = False,
     verbose: bool,
     debug: bool,
     label: str,
@@ -81,28 +77,27 @@ def _conflict_scan_and_append(
         if show_map:
             focus = conflict_rects_from_details(conflicts_by_mid)
             try:
-                projected_ids = {as_int(t, 'id') for t in copies if t.get('id') is not None}
+                focus_arg = focus if map_focus == 'conflict' else None
+                tiles_for_map = dest_tiles if (map_focus == 'full' or map_focus == 'no_scale') else (stationary + copies)
+                # Conflict map: gray=stationary, green=moving/copied (non-conflict), red=conflict
+                tiles_for_map = stationary
+                hi_rects = [rect(t) for t in copies]
                 full_like = (map_focus == 'full' or map_focus == 'no_scale')
-                bounds_rects = [rect(t) for t in dest_tiles] + [rect(t) for t in copies] if full_like else focus
+                bounds_rects = [rect(t) for t in dest_tiles] if full_like else (focus if map_focus == 'conflict' else None)
                 print(
                     render_tile_map(
-                        stationary + copies,
+                        tiles_for_map,
                         title='CONFLICT MAP',
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
-                        changed_ids=projected_ids,
-                        no_scale=True,
-                        show_ids=show_ids,
-                        show_axes=show_axes,
+                        highlight_rects=hi_rects,
+                        no_scale=(map_focus == 'no_scale'),
                     ),
                     end='',
-                    file=_sys.stderr,
                 )
             except Exception:
                 pass
-        detail_level = 'diagnostic' if debug else ('legacy' if verbose else 'summary')
-        report = render_abort_conflicts(copies, stationary, conflicts_by_mid, action_word='merge', detail_level=detail_level)
-        die(report.rstrip())
+        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
 
     appended_ids: Set[int] = set()
     added = 0
@@ -131,8 +126,6 @@ def merge_cols(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    show_axes: str = 'none',
-    show_ids: bool = False,
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -178,8 +171,6 @@ def merge_cols(
         label="merge_cols",
         show_map=show_map,
         map_focus=map_focus,
-        show_axes=show_axes,
-        show_ids=show_ids,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}
@@ -197,8 +188,6 @@ def merge_rows(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    show_axes: str = 'none',
-    show_ids: bool = False,
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -244,8 +233,6 @@ def merge_rows(
         label="merge_rows",
         show_map=show_map,
         map_focus=map_focus,
-        show_axes=show_axes,
-        show_ids=show_ids,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}
@@ -266,8 +253,6 @@ def merge_range(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    show_axes: str = 'none',
-    show_ids: bool = False,
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -326,8 +311,6 @@ def merge_range(
         label="merge_range",
         show_map=show_map,
         map_focus=map_focus,
-        show_axes=show_axes,
-        show_ids=show_ids,
     )
 
     return {k: v for k, v in id_map.items() if v in appended_ids}

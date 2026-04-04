@@ -55,63 +55,66 @@ Output destinations (repeatable; default is clipboard if none specified):
   --output:terminal
   --output:clipboard
   --output:file <filename>
-  --output:hub [dashboard_url]       (FULL input only; URL optional if importing from hub; not valid with --list_tiles)
+  --output:hub [dashboard_url]       (FULL input only; URL optional if importing from hub)
 
-Layout actions (at most ONE per run):
-  Insert:   --insert:rows COUNT AT_ROW
-            --insert:cols COUNT AT_COL
-  Spacing:  --spacing_add:rows CELLS  |  --spacing_add:cols CELLS  |  --spacing_add:all CELLS   (CELLS may be negative; gaps clamp at 0)
-            --spacing_set:rows GAP    |  --spacing_set:cols GAP    |  --spacing_set:all GAP     (GAP must be >= 0)
-  Move:     --move:cols START END DEST
-            --move:rows START END DEST
-            --move:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+Main actions (at most ONE per run):
+  Insert:      --insert:rows COUNT AT_ROW
+               --insert:cols COUNT AT_COL
 
-  Copy:     --copy:cols START END DEST
-            --copy:rows START END DEST
-            --copy:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
+  Move:        --move:cols START END DEST
+               --move:rows START END DEST
+               --move:range SRC_TOP SRC_LEFT SRC_BOTTOM SRC_RIGHT DEST_TOP DEST_LEFT
 
-  Merge:    --merge:cols START END DEST
-            --merge:rows START END DEST
-            --merge:range SRC_T SRC_L SRC_B SRC_R DEST_T DEST_L
-            --merge_source:file <filename> OR  --merge_source:hub <dashboard_url>
+  Copy:        --copy:cols START END DEST
+               --copy:rows START END DEST
+               --copy:range SRC_TOP SRC_LEFT SRC_BOTTOM SRC_RIGHT DEST_TOP DEST_LEFT
 
-  Delete:   --delete:rows START END
-            --delete:cols START END
+  Merge:       --merge:cols START END DEST
+               --merge:rows START END DEST
+               --merge:range SRC_TOP SRC_LEFT SRC_BOTTOM SRC_RIGHT DEST_TOP DEST_LEFT
+               --merge_source:file <filename> OR --merge_source:hub <dashboard_url>
 
-  Clear:    --clear:rows START END
-            --clear:cols START END
-            --clear:range TOP LEFT BOTTOM RIGHT
+  Delete:      --delete:rows START END
+               --delete:cols START END
 
-  Crop:     --crop:rows START END
-            --crop:cols START END
-            --crop:range TOP LEFT BOTTOM RIGHT
+  Clear:       --clear:rows START END
+               --clear:cols START END
+               --clear:range TOP LEFT BOTTOM RIGHT
 
-  Prune:    --prune:ids <spec>
-            --prune:devices <spec>
-            --prune_except:ids <spec>
-            --prune_except:devices <spec>
+  Crop:        --crop:rows START END
+               --crop:cols START END
+               --crop:range TOP LEFT BOTTOM RIGHT
 
-  Copy CSS: --copy_css:merge FROM_TILE TO_TILE
-            --copy_css:overwrite FROM_TILE TO_TILE
-            --copy_css:replace FROM_TILE TO_TILE
-            --copy_css:add FROM_TILE TO_TILE
-            --clear_css <spec>
+  Prune:       --prune:ids <spec>
+               --prune:devices <spec>
+               --prune_except:ids <spec>
+               --prune_except:devices <spec>
 
-Additional actions (may be combined with the single layout action):
-  --trim[:top|left|top,left]        (default: top,left; left,top accepted)
-  --sort[:<keys>]                   (runs after trim; default keys are irc)
-  --scrub_css                       (runs last; can run alone)
-  --compact_css                     (runs last; can run alone)
+  Spacing:     --spacing_add:rows CELLS | --spacing_add:cols CELLS | --spacing_add:all CELLS
+               --spacing_set:rows GAP   | --spacing_set:cols GAP   | --spacing_set:all GAP
+
+  Copy CSS:    --copy_css:merge FROM_TILE TO_TILE
+               --copy_css:overwrite FROM_TILE TO_TILE
+               --copy_css:replace FROM_TILE TO_TILE
+               --copy_css:add FROM_TILE TO_TILE
+               --clear_css <spec>
+
+Additional actions (may be combined with the single main action):
+  --trim[:top|left|top,left]
+  --sort[:<keys>]            (keys: i=id, r=row, c=col; prefix key with - for descending)
+  --scrub_css
+  --compact_css
 
 Modifiers:
   --include_overlap
-  --no_overlap                    (spacing_set only; global un-overlap; cannot be combined with --include_overlap)
-  --row_range <start> <end>         (insert_cols only)
-  --col_range <start> <end>         (insert_rows only)
-  --allow_overlap / --skip_overlap  (move/copy/merge)
-  --force                           (skip confirmation prompts)
-  --cleanup_css                     (remove tile-specific CSS for removed tiles)
-  --ignore_css                      (do not copy/create CSS for copy/merge)
+  --no_overlap                     (spacing_set only; cannot be combined with --include_overlap)
+  --row_range <start> <end>        (insert:cols and delete:cols only)
+  --col_range <start> <end>        (insert:rows and delete:rows only)
+  --allow_overlap                (move/copy/merge and delete rows/cols)
+  --skip_overlap                 (move/copy/merge only; mutually exclusive with --allow_overlap)
+  --force
+  --cleanup_css
+  --ignore_css
 
 Hubitat direct mode:
   --undo_last
@@ -119,19 +122,13 @@ Hubitat direct mode:
   --lock_backup
 
 Maps:
-  --show_map[:full|:conflicts|:no_scale]
-  --show_ids                          (label tile ids on maps; group overlapping labels below map)
-  --show_axis:row|col|all             (show real row/col numbers on map edges)
-
-Tile reports:
-  --list_tiles:<type>[:<keys>]        (standalone tile report; types: plain, tree, overlap, nested, conflicts)
+  --show_map[:full|:conflicts|:no_scale]   (standalone map view if no action is given)
 
 More help:
   --help:full
-  --version
-'''
+  --version'''
 
-FULL_HELP = r"""hubitat_tile_mover � adjust a Hubitat Dashboard layout by operating on the "tiles" list (row/col only), preserving everything else unchanged.
+FULL_HELP = r"""hubitat_tile_mover - adjust a Hubitat Dashboard layout by operating on the "tiles" list while preserving everything else unchanged.
 
 Import (input) (only one; default is clipboard):
   --import:clipboard
@@ -142,222 +139,168 @@ Output destinations (repeatable; default is clipboard if none specified):
   --output:terminal
   --output:clipboard
   --output:file <filename>
-  --output:hub [dashboard_url] (URL optional if importing from hub; not valid with --list_tiles)
+  --output:hub [dashboard_url]       (FULL input only; URL optional if importing from hub)
 
-Undo Actions (from output saved directly to hub)
-  --undo_last (restores changes saved to hub by previous run)
-  --confirm_keep (prompts to keep changes saved directly to hub)
-  --lock_backup (keep existing undo file as current restore point)
+Hubitat direct mode:
+  --undo_last
+  --confirm_keep
+  --lock_backup
   Note: undo files are maintained per dashboard.
 
+Main actions (mutually exclusive; choose at most ONE per run)
 
-LAYOUT ACTIONS (mutually exclusive; choose at most ONE per run)
+  Insert empty rows / columns:
+    --insert:rows COUNT AT_ROW
+    --insert:cols COUNT AT_COL
+    Modifiers: --include_overlap, --col_range / --row_range
 
-  MOVE EXISTING TILES
+  Move tiles:
+    --move:cols START_COL END_COL DEST_START_COL
+    --move:rows START_ROW END_ROW DEST_START_ROW
+    --move:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+    Modifiers: --include_overlap, --allow_overlap, --skip_overlap
 
-    Insert empty rows / columns:
-      --insert:rows COUNT AT_ROW
-      --insert:cols COUNT AT_COL
-      Modifiers: --include_overlap, --col_range/--row_range
+  Copy / duplicate existing tiles:
+    --copy:cols START_COL END_COL DEST_START_COL
+    --copy:rows START_ROW END_ROW DEST_START_ROW
+    --copy:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+    Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
 
-    Move tiles:
-      --move:cols START_COL END_COL DEST_START_COL
-      --move:rows START_ROW END_ROW DEST_START_ROW
-      --move:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
-      Modifiers: --include_overlap, --allow_overlap, --skip_overlap
+  Merge / import tiles from another layout:
+    --merge_source:file <filename>
+    --merge_source:hub <dashboard_url>
+    --merge:cols START_COL END_COL DEST_START_COL
+    --merge:rows START_ROW END_ROW DEST_START_ROW
+    --merge:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
+    Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
 
-  ADD TILES
+  Delete rows / columns (removes matched tiles and shifts following tiles up / left):
+    --delete:rows START_ROW END_ROW
+    --delete:cols START_COL END_COL
+    Modifiers: --include_overlap, --row_range / --col_range, --allow_overlap, --cleanup_css, --force
 
-    Copy / duplicate existing tiles (within the input layout):
-      --copy:cols START_COL END_COL DEST_START_COL
-      --copy:rows START_ROW END_ROW DEST_START_ROW
-      --copy:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
-      Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
+  Clear tiles (removes matched tiles but does not shift anything):
+    --clear:rows START_ROW END_ROW
+    --clear:cols START_COL END_COL
+    --clear:range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
+    Modifiers: --include_overlap, --cleanup_css, --force
 
-    Merge / import tiles from another layout:
-      --merge_source:file <filename>
-      --merge_source:hub <dashboard_url>
-      --merge:cols START_COL END_COL DEST_START_COL
-      --merge:rows START_ROW END_ROW DEST_START_ROW
-      --merge:range SRC_TOP_ROW SRC_LEFT_COL SRC_BOTTOM_ROW SRC_RIGHT_COL DEST_TOP_ROW DEST_LEFT_COL
-      Modifiers: --include_overlap, --allow_overlap, --skip_overlap, --ignore_css
+  Crop (remove everything outside the kept range):
+    --crop:rows START_ROW END_ROW
+    --crop:cols START_COL END_COL
+    --crop:range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
+    Modifiers: --include_overlap, --cleanup_css, --force
+    Notes: the kept range must contain at least one tile; at least one tile must remain.
 
-  REMOVE TILES
+  Prune:
+    Keep-only mode:
+      --prune_except:ids <spec>
+      --prune_except:devices <spec>
+    Remove-matches mode:
+      --prune:ids <spec>
+      --prune:devices <spec>
+    Modifiers: --cleanup_css, --force
+    SPEC supports comma lists (1,5,8), ranges (5-10), and comparisons (<5, >=7).
 
-    Delete rows / columns (removes tiles AND shifts following tiles up/left):
-      --delete:rows START_ROW END_ROW
-      --delete:cols START_COL END_COL
-      Modifiers: --include_overlap, --row_range/--col_range, --cleanup_css, --force
+  Spacing actions (standalone main actions):
+    --spacing_add:rows CELLS
+    --spacing_add:cols CELLS
+    --spacing_add:all CELLS
+      CELLS may be negative. Gaps are clamped at 0.
 
-    Clear tiles (removes tiles but does NOT shift anything):
-      --clear:rows START_ROW END_ROW
-      --clear:cols START_COL END_COL
-      --clear:range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
-      Modifiers: --include_overlap, --cleanup_css, --force
+    --spacing_set:rows GAP
+    --spacing_set:cols GAP
+    --spacing_set:all GAP
+      GAP must be >= 0.
 
-    Crop (remove everything OUTSIDE the kept range):
-      --crop:rows START_ROW END_ROW
-      --crop:cols START_COL END_COL
-      --crop:range TOP_ROW LEFT_COL BOTTOM_ROW RIGHT_COL
-      Modifiers: --include_overlap, --cleanup_css, --force
-      Notes: the kept range must contain at least one tile; at least one tile must remain.
+    Overlap behavior for spacing_set:
+      default            overlapping tiles are grouped into overlap-unions
+      --include_overlap  adjust spacing within each overlap-union only
+      --no_overlap       treat every tile as its own unit
+      Note: --include_overlap and --no_overlap are mutually exclusive.
+      Note: --no_overlap is only valid with --spacing_set:*.
 
-    Prune:
-      Keep-only mode (remove everything EXCEPT matching tiles):
-        --prune_except:ids <SPEC>
-        --prune_except:devices <SPEC>
-      Remove-matches mode (remove only matching tiles):
-        --prune:ids <SPEC>
-        --prune:devices <SPEC>
-      Modifiers: --cleanup_css, --force
-      SPEC supports: comma lists (1,5,8), ranges (5-10), comparisons (<5, >=7). For devices, numeric specs match device strings "0","1",...
-      Notes: at least one tile must match; at least one tile must remain.
+  Copy CSS actions (modify customCSS; can run alone):
+    --copy_css:merge FROM_TILE TO_TILE
+    --copy_css:overwrite FROM_TILE TO_TILE
+    --copy_css:replace FROM_TILE TO_TILE
+    --copy_css:add FROM_TILE TO_TILE
+    --clear_css <spec>
 
+Additional actions (can run alone or run after the single main action)
 
-ADDITIONAL ACTIONS (can be used alone or combined with the single layout action)
-
-  Trim (performed after the layout action, before sorting):
+  Trim (performed after the main action, before sorting):
     --trim                 (same as --trim:top,left)
     --trim:top
     --trim:left
     --trim:top,left        (default)
     --trim:left,top        (also accepted)
 
-  Spacing (performed after the layout action, before trim/sort):
-
-    Add/subtract spacing between units:
-      --spacing_add:rows CELLS
-      --spacing_add:cols CELLS
-      --spacing_add:all  CELLS
-        CELLS may be negative. Example: if a gap is 9 and you run --spacing_add:all -2, it becomes 7.
-        Gaps are clamped at 0 (never negative).
-
-    Set spacing to a fixed number of blank cells:
-      --spacing_set:rows GAP
-      --spacing_set:cols GAP
-      --spacing_set:all  GAP
-        GAP must be >= 0.
-
-    Overlap behavior for spacing:
-      Default: overlapping tiles are grouped into overlap-unions (treated as a single unit).
-      --include_overlap (spacing_set only): adjusts spacing within each overlap-union only.
-      --no_overlap (spacing_set only): treat EVERY tile as its own unit (global un-overlap).
-      NOTE: --include_overlap and --no_overlap are mutually exclusive.
-
-
   Sort (only applied if --sort is present; affects output order only):
-    --sort                 (same as --sort:irc)
-    --sort:<SPEC>
-
+    --sort               (same as --sort:irc)
+    --sort:<spec>
     Keys: i=id, r=row, c=col
-    Default SPEC: irc
-    Prefix a key with '-' to sort that key descending (example: --sort:-i r c)
-    Missing keys are appended in i,r,c order (ascending)
+    Default spec: irc
+    Prefix a key with '-' to sort that key descending.
+    Missing keys are appended in i,r,c order (ascending).
 
   Scrub orphan CSS (performed last, after sorting):
     --scrub_css
       Finds tile-specific CSS rules in customCSS that reference tile ids not present as tiles.
       Prompts before removal unless --force is specified.
-      If --scrub_css is NOT specified and orphans are detected, the program warns how many were found.
-
-
-
-  Tile CSS actions (modify customCSS; can run alone):
-    Copy CSS from one existing tile id to another existing tile id:
-      --copy_css:merge FROM_TILE TO_TILE
-      --copy_css:overwrite FROM_TILE TO_TILE
-      --copy_css:replace FROM_TILE TO_TILE
-      --copy_css:add FROM_TILE TO_TILE
-      Notes:
-        :merge prompts per conflicting rule (keep/overwrite/abort). With --force, conflicts are skipped.
-        :overwrite overwrites conflicting destination rules automatically.
-        :replace removes destination tile rules first, then copies all source tile rules.
-        :add copies all rules regardless of conflicts (may create duplicates).
-      Rule duplication uses the same remap behavior as tile copy/merge (selector remap and body rewrite of tile-OLD→tile-NEW).
-
-    Clear CSS for an existing tile id (tile remains):
-      --clear_css <spec>
-
 
   Compact CSS (performed last; can run alone):
     --compact_css
-      Rewrites customCSS as one selector rule per line (selector { body }), splits selector lists, and sorts lines.
-      Sorting: non-tile class selectors (start with '.' but not .tile-N) first, then tile selectors (#tile-N/.tile-N) by N, then everything else.
-  Layout Maps: (Show in terminal before and after layouts, movement conflicts)
-    --show_map                 (same as --show_map:full)
-    --show_map:full            (print BEFORE / OUTCOME maps; default)
-    --show_map:conflicts       (focus maps on affected/conflicting region)
-    --show_map:no_scale        (no scaling; 1 row/col = 1 character)
-    --show_ids                 (label tile ids on maps; overlapping/colliding labels become Grp-A, Grp-B, ... with a list below the map)
-    Note: Show map can be used without an action to display the current layout of the import dashboard.
+      Rewrites customCSS as one selector rule per line and sorts the result.
 
-MODIFIERS
+Maps:
+  --show_map                 (same as --show_map:full)
+  --show_map:full            (print BEFORE / OUTCOME maps; default)
+  --show_map:conflicts       (focus maps on affected / conflicting region)
+  --show_map:no_scale        (no scaling; 1 row / col = 1 character)
+  Note: --show_map can be used without an action to display the imported layout.
+
+Modifiers
 
   Selection / overlap:
     --include_overlap
-      Default selection: tiles are selected when their top-left (row,col) is inside the source/range.
-      With --include_overlap: tiles are also selected when their span intersects the source/range
-      (span uses rowSpan/colSpan; missing span defaults to 1x1).
+      Default selection uses the tile's top-left (row,col).
+      With --include_overlap, tiles are also selected when their span intersects the source / range.
 
-  Insert/Delete range filters (limit which tiles are affected):
-    --col_range <start_col> <end_col>     (only with --insert:rows and --delete:rows)
-    --row_range <start_row> <end_row>     (only with --insert:cols and --delete:cols)
-      example: --insert:rows 5 10 --col_range 2 7 ==> insert 5 rows at row 10 only in columns 2-7
+  Insert / delete range filters:
+    --col_range <start_col> <end_col>     (insert:rows and delete:rows only)
+    --row_range <start_row> <end_row>     (insert:cols and delete:cols only)
 
-
-  Destination conflict policy (move/copy/merge only):
-    --allow_overlap
-      Proceed even if destination conflicts exist.
-    --skip_overlap
-      Skip only the tiles that would conflict in the destination.
-    default (neither set):
-      Abort before changing anything if any destination conflicts exist.
+  Destination conflict policy:
+    --allow_overlap   move/copy/merge: proceed even if destination conflicts exist
+                      delete rows/cols: proceed even if post-delete shift conflicts would occur
+    --skip_overlap    move/copy/merge only: skip only the tiles that would conflict in the destination
+    default           abort before changing anything if destination conflicts exist
+    Note: --allow_overlap and --skip_overlap are mutually exclusive.
 
   Confirmation suppression:
-    --force
-      Skip interactive confirmations when tiles or CSS rules would be removed.
+    --force           skip interactive confirmations when tiles or CSS rules would be removed
 
-
-CSS OPTIONS
+CSS options
 
   --ignore_css
-      When copying/merging tiles, do not create/merge tile-specific CSS rules for new tile ids.
+    When copying / merging tiles, do not create / merge tile-specific CSS rules for new tile ids.
 
   --cleanup_css
-      When tiles are removed (delete/clear/crop/prune), attempt to remove tile-specific CSS rules for those tile ids.
-      Prompts before removal unless --force is specified.
+    When tiles are removed (delete / clear / crop / prune), attempt to remove tile-specific CSS rules for those tile ids.
+    Prompts before removal unless --force is specified.
 
-  Note: Tile id assignment when copying/merging:
-        New tile ids are assigned sequentially starting at:
-            1 + max(highest existing tile id, highest tile id referenced in customCSS)
-        This prevents newly created tiles from accidentally reusing ids that still have orphan CSS rules.
+Diagnostics
 
+  --quiet             suppress the final one-line summary
+  --verbose           planned actions summary to STDERR
+  --debug             per-tile action logs to STDERR
 
-DIAGNOSTICS
+Other
 
-  --quiet                  Suppress the final one-line summary
-  --verbose                Planned actions summary to STDERR
-  --debug                  Per-tile action logs to STDERR
-
-
-
-  Copyright 2026 Andrew Peck
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-
-  --version  Print build version and exit.
-"""
+  -h, --help          show short help and exit
+  --help:full         show expanded help and exit
+  --version           print build version and exit"""
 
 
 
@@ -390,7 +333,7 @@ class TileSorterArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         # Keep argparse-style errors, but add a hint.
         self.print_usage(sys.stderr)
-        self.exit(2, f"ERROR: {message}\nUse -h for help.\n")
+        self.exit(2, f"ERROR: {message}\nUse -h or --help:full for help.\n")
 
 
 
@@ -878,16 +821,6 @@ def build_parser() -> argparse.ArgumentParser:
     diag_grp.add_argument("--show_map:full", dest="show_map_mode", action="store_const", const="full", help="Show BEFORE/AFTER ASCII layout maps in the terminal")
     diag_grp.add_argument("--show_map:conflicts", dest="show_map_mode", action="store_const", const="conflict", help="Focus maps on affected/conflicting region")
     diag_grp.add_argument("--show_map:no_scale", dest="show_map_mode", action="store_const", const="no_scale", help="Show maps unscaled (1 row/col = 1 character)")
-    diag_grp.add_argument("--show_ids", "--show-ids", action="store_true", help="Show tile ids on ASCII maps; colliding labels are grouped below the map")
-    diag_grp.add_argument("--show_axis:row", dest="show_axes", action="store_const", const="row", help="Show row numbers on the left edge of ASCII maps")
-    diag_grp.add_argument("--show_axis:col", dest="show_axes", action="store_const", const="col", help="Show column numbers along the top edge of ASCII maps")
-    diag_grp.add_argument("--show_axis:all", dest="show_axes", action="store_const", const="all", help="Show both row and column numbers on ASCII maps")
-    diag_grp.add_argument("--show_axis:both", dest="show_axes", action="store_const", const="all", help=argparse.SUPPRESS)
-    diag_grp.add_argument("--show_axes:row", dest="show_axes", action="store_const", const="row", help=argparse.SUPPRESS)
-    diag_grp.add_argument("--show_axes:col", dest="show_axes", action="store_const", const="col", help=argparse.SUPPRESS)
-    diag_grp.add_argument("--show_axes:all", dest="show_axes", action="store_const", const="all", help=argparse.SUPPRESS)
-    diag_grp.add_argument("--show_axes:both", dest="show_axes", action="store_const", const="all", help=argparse.SUPPRESS)
-    diag_grp.add_argument("--list_tiles", dest="list_tiles", nargs="?", const="plain:rci", metavar="TYPE[:SPEC]", help="Standalone tile report action: plain, tree, overlap, nested, conflicts")
 
     diag_grp.add_argument(
         "--map_focus",

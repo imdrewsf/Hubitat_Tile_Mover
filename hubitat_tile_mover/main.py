@@ -5,7 +5,6 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 from .util import die, ilog, prompt_yes_no, prompt_yes_no_or_die, format_id_sample, ok, warn, wlog, layout_fingerprint
-from .list_views import render_list_tiles
 
 def vlog(enabled: bool, msg: str) -> None:
     """Verbose logger."""
@@ -509,10 +508,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     import_kind, import_path = parse_import_spec(args.import_spec)
     outputs = parse_output_to_specs(args.output_to)
 
-    # Standalone tile reports use the normal output destinations, but never hub.
-    if getattr(args, 'list_tiles', None) and any(k == 'hub' for (k, _) in outputs):
-        die("--output:hub is not valid with --list_tiles. Use --output:terminal, --output:clipboard, or --output:file.")
-
     # Resolve hub URLs:
     # - import_path is the dashboard URL when import_kind == 'hub'
     # - output entries may include ('hub', None) or ('hub', url)
@@ -537,13 +532,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     if map_focus is None:
         map_focus = 'full'
     no_scale = (map_focus == 'no_scale')
-    show_ids = bool(getattr(args, 'show_ids', False))
-    show_axes = getattr(args, 'show_axes', None) or 'none'
-    if show_ids and not show_map:
-        die("--show_ids requires --show_map.")
-    if show_axes != 'none' and not show_map:
-        die("--show_axis:* requires --show_map. (legacy --show_axes:* also accepted)")
-    list_tiles_spec = getattr(args, 'list_tiles', None)
 
     # --undo_last is a standalone restore action.
     # It restores the previous backup and writes it to the last output destinations unless --output/--output_to is provided.
@@ -786,20 +774,13 @@ def main(argv: Optional[List[str]] = None) -> None:
     )
 
     has_sort = bool((args.sort is not None) or (getattr(args, "order", None) is not None))
-    # Standalone view modes.
-    list_tiles_only = bool(list_tiles_spec) and not (
-        bool(show_map) or has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort
-    )
-    view_only = bool(show_map) and not (
-        bool(list_tiles_spec) or has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort
-    )
+    # Standalone map view mode: --show_map (any mode) with no other actions.
+    # This mode should only render the imported layout map and still check for orphan CSS.
+    view_only = bool(show_map) and not (has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort)
 
-    if bool(list_tiles_spec) and not list_tiles_only:
-        die("--list_tiles is a standalone action and cannot be combined with layout actions, --show_map, --sort, --trim, spacing, or CSS operations.")
-
-    if not (has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort or view_only or list_tiles_only):
+    if not (has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort or view_only):
         die(
-            "No operation specified. Use one movement/edit option and/or trim and/or --sort and/or --scrub_css and/or --compact_css, or use standalone --show_map or standalone --list_tiles to view the imported layout. Use -h for help."
+            "No operation specified. Use one movement/edit option and/or trim and/or --sort and/or --scrub_css and/or --compact_css, or use --show_map to view the imported layout. Use -h for help."
         )
 
     # Validate range filters usage
@@ -809,12 +790,21 @@ def main(argv: Optional[List[str]] = None) -> None:
         die("--row_range is only valid with --insert_cols or --delete_cols.")
 
     # Validate conflict policy usage
-    if (args.allow_overlap or args.skip_overlap) and not (
+    if args.skip_overlap and args.allow_overlap:
+        die("--skip_overlap and --allow_overlap cannot be used at the same time.")
+    if args.skip_overlap and not (
         args.move_cols or args.move_rows or args.move_range
         or args.copy_cols or args.copy_rows or args.copy_range
         or args.merge_cols or args.merge_rows or args.merge_range
     ):
-        die("--allow_overlap/--skip_overlap are only valid with --move_*, --copy_*, or --merge_* commands.")
+        die("--skip_overlap is only valid with --move_*, --copy_*, or --merge_* commands.")
+    if args.allow_overlap and not (
+        args.move_cols or args.move_rows or args.move_range
+        or args.copy_cols or args.copy_rows or args.copy_range
+        or args.merge_cols or args.merge_rows or args.merge_range
+        or args.delete_rows or args.delete_cols
+    ):
+        die("--allow_overlap is only valid with --move_*, --copy_*, --merge_*, --delete_rows, or --delete_cols commands.")
     # --force is allowed for any action that would otherwise prompt for confirmation.
 
     # Copy-tile-css modes are expressed as action switches (mutually exclusive).
@@ -904,7 +894,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     def _ga(name):
         return getattr(args, name, None)
-    show_map_only = (bool(show_map) or bool(list_tiles_spec)) and not any([
+    show_map_only = bool(show_map) and not any([
         _ga('sort'), _ga('sort_spec'), _ga('trim'),
         _ga('insert_rows'), _ga('insert_cols'),
         _ga('move_cols'), _ga('move_rows'), _ga('move_range'),
@@ -980,8 +970,6 @@ def main(argv: Optional[List[str]] = None) -> None:
                 mark_rects=before_mark_rects,
                 bounds_rects=bounds_rects,
                 no_scale=no_scale,
-                show_ids=show_ids,
-                show_axes=show_axes,
             ),
             end='',
             file=sys.stderr,
@@ -1014,13 +1002,6 @@ def main(argv: Optional[List[str]] = None) -> None:
                 out_text0 += "\n"
             non_hub_outputs0 = [(k, p) for (k, p) in outputs if k != 'hub']
             write_outputs(non_hub_outputs0, args.newline, out_text0)
-        return
-
-    if list_tiles_only:
-        report_outputs = outputs if args.output_to else [('terminal', None)]
-        _, css_text0 = get_custom_css(obj)
-        tile_report_text = render_list_tiles(tiles_before_map, list_tiles_spec, css_text0 or '')
-        write_outputs(report_outputs, args.newline, tile_report_text)
         return
 
     # Treat tile ids referenced in customCSS as reserved for id assignment (avoids collisions with orphaned CSS).
@@ -1119,8 +1100,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -1137,8 +1116,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -1158,8 +1135,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -1177,8 +1152,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1196,8 +1169,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1218,8 +1189,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1238,8 +1207,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1260,8 +1227,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1285,8 +1250,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
-            show_axes=show_axes,
-            show_ids=show_ids,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1303,8 +1266,11 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             col_range=col_range,
             force=args.force,
+            allow_overlap=args.allow_overlap,
             verbose=args.verbose,
             debug=args.debug,
+            show_map=show_map,
+            map_focus=map_focus,
         )
 
     elif args.delete_cols:
@@ -1316,8 +1282,11 @@ def main(argv: Optional[List[str]] = None) -> None:
             include_overlap=args.include_overlap,
             row_range=row_range,
             force=args.force,
+            allow_overlap=args.allow_overlap,
             verbose=args.verbose,
             debug=args.debug,
+            show_map=show_map,
+            map_focus=map_focus,
         )
 
     elif args.clear_rows:
@@ -1722,7 +1691,6 @@ def main(argv: Optional[List[str]] = None) -> None:
                         conflict_rects.append((or1, or2, oc1, oc2))
 
         focus_color = "yellow" if getattr(args, "allow_overlap", False) else "red"
-        outcome_no_scale = no_scale or bool(conflict_rects)
         print(
             render_tile_map(
                 final_tiles,
@@ -1730,9 +1698,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 changed_ids=changed_ids,
                 focus_rects=conflict_rects,
                 focus_color=focus_color,
-                no_scale=outcome_no_scale,
-                show_ids=show_ids,
-                show_axes=show_axes,
+                no_scale=no_scale,
             ),
             end="",
             file=sys.stderr,
@@ -1793,9 +1759,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                         title="CONFLICT MAP (OUTCOME)",
                         focus_rects=[orect],
                         focus_color="red",
-                        no_scale=True,
-                        show_ids=show_ids,
-                        show_axes=show_axes,
+                        no_scale=no_scale,
                     ),
                     end="",
                     file=sys.stderr,

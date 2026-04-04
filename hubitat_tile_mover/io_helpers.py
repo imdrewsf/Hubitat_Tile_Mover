@@ -20,12 +20,6 @@ def normalize_argv(argv: List[str]) -> List[str]:
       --output_to:hub <dashboard_url>
       --sort:irc
       --order:rci (legacy)
-      --show_axis:row|col|all
-      --list_tiles:plain[:rci]
-      --list_tiles:tree[:rci]
-      --list_tiles:overlap[:rci]
-      --list_tiles:nested[:rci]
-      --list_tiles:conflicts[:rci]
       --indent:0
 
     Converts to space-separated argv suitable for argparse.
@@ -40,9 +34,7 @@ def normalize_argv(argv: List[str]) -> List[str]:
             out += ["--indent", a.split(":", 1)[1]]
         elif a.startswith("--trim:"):
             out += ["--trim", a.split(":", 1)[1]]
-        elif a.startswith("--list_tiles:") or a.startswith("--list-tiles:"):
-            out += ["--list_tiles", a.split(":", 1)[1]]
-        # --show_map:* and --show_axis:* are handled directly by argparse (legacy --show_axes:* also accepted)
+        # --show_map:* is handled directly by argparse (no normalization needed)
         elif a.startswith("--import:"):
             out += ["--import", a.split(":", 1)[1]]
         elif a.startswith("--merge_source:") or a.startswith("--merge-source:"):

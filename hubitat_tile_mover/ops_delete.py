@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from .geometry import ranges_overlap
+from .ops_move import scan_move_conflicts
 from .selectors import (
     find_straddlers_cols,
     find_straddlers_rows,
@@ -23,11 +24,11 @@ def delete_rows(
     include_overlap: bool,
     col_range: Optional[Tuple[int, int]],
     force: bool,
-    verbose: bool,
-    debug: bool,
+    allow_overlap: bool = False,
+    verbose: bool = False,
+    debug: bool = False,
     show_map: bool = False,
     map_focus: str = 'full',
-    show_axes: str = 'none',
 ) -> List[int]:
     if start_row <= 0 or end_row <= 0:
         _die("--delete_rows values must be positive (1-based).")
@@ -51,6 +52,47 @@ def delete_rows(
                 selected.append(t)
 
     selected_ids = [as_int(t, "id") for t in selected]
+
+    selected_obj_ids = {id(t) for t in selected}
+    remaining = [t for t in tiles if id(t) not in selected_obj_ids]
+    shifting: List[Dict[str, Any]] = []
+    stationary: List[Dict[str, Any]] = []
+    for t in remaining:
+        if tile_matches_col_range(t, col_range, include_overlap) and as_int(t, "row") > end_row:
+            shifting.append(t)
+        else:
+            stationary.append(t)
+
+    def shifted_rect_rows(t: Dict[str, Any]) -> Tuple[int, int, int, int]:
+        r1, r2, c1, c2 = rect(t)
+        return (r1 - delete_count, r2 - delete_count, c1, c2)
+
+    conflicts_by_mid, total_pairs = scan_move_conflicts(shifting, stationary, shifted_rect_rows)
+    if conflicts_by_mid and not allow_overlap:
+        sample = list(conflicts_by_mid.items())[:10]
+        details = '; '.join([f"shift id={mid} conflicts at r{entries[0][1][0]}..{entries[0][1][1]},c{entries[0][1][2]}..{entries[0][1][3]} with {[sid for sid,_ in entries]}" for mid, entries in sample])
+        more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
+        if show_map:
+            import sys as _sys
+            focus = []
+            for entries in conflicts_by_mid.values():
+                for _, orect in entries:
+                    focus.append(orect)
+            projected_rects = [shifted_rect_rows(t) for t in shifting]
+            bounds_rects = ([rect(t) for t in stationary] + projected_rects) if (map_focus == 'full' or map_focus == 'no_scale') else (focus if map_focus == 'conflict' else None)
+            print(
+                render_tile_map(
+                    stationary,
+                    title="CONFLICT MAP",
+                    focus_rects=focus or None,
+                    bounds_rects=bounds_rects,
+                    highlight_rects=projected_rects,
+                    no_scale=(map_focus == 'no_scale' or map_focus == 'conflict'),
+                ),
+                end="",
+                file=_sys.stderr,
+            )
+        _die(f"Destination conflicts detected after delete_rows shift. Re-run with --allow_overlap. {details}{more}")
     if selected:
         details_lines = [
             f"WARNING: --delete_rows {start_row}..{end_row} will delete {len(selected)} tile(s).",
@@ -70,7 +112,6 @@ def delete_rows(
                     mark_rects=mark_rects,
                     bounds_rects=bounds_rects,
                     no_scale=(map_focus == 'no_scale'),
-                    show_axes=show_axes,
                 ),
                 end="",
                 file=_sys.stderr,
@@ -113,11 +154,11 @@ def delete_cols(
     include_overlap: bool,
     row_range: Optional[Tuple[int, int]],
     force: bool,
-    verbose: bool,
-    debug: bool,
+    allow_overlap: bool = False,
+    verbose: bool = False,
+    debug: bool = False,
     show_map: bool = False,
     map_focus: str = 'full',
-    show_axes: str = 'none',
 ) -> List[int]:
     if start_col <= 0 or end_col <= 0:
         _die("--delete_cols values must be positive (1-based).")
@@ -141,6 +182,47 @@ def delete_cols(
                 selected.append(t)
 
     selected_ids = [as_int(t, "id") for t in selected]
+
+    selected_obj_ids = {id(t) for t in selected}
+    remaining = [t for t in tiles if id(t) not in selected_obj_ids]
+    shifting: List[Dict[str, Any]] = []
+    stationary: List[Dict[str, Any]] = []
+    for t in remaining:
+        if tile_matches_row_range(t, row_range, include_overlap) and as_int(t, "col") > end_col:
+            shifting.append(t)
+        else:
+            stationary.append(t)
+
+    def shifted_rect_cols(t: Dict[str, Any]) -> Tuple[int, int, int, int]:
+        r1, r2, c1, c2 = rect(t)
+        return (r1, r2, c1 - delete_count, c2 - delete_count)
+
+    conflicts_by_mid, total_pairs = scan_move_conflicts(shifting, stationary, shifted_rect_cols)
+    if conflicts_by_mid and not allow_overlap:
+        sample = list(conflicts_by_mid.items())[:10]
+        details = '; '.join([f"shift id={mid} conflicts at r{entries[0][1][0]}..{entries[0][1][1]},c{entries[0][1][2]}..{entries[0][1][3]} with {[sid for sid,_ in entries]}" for mid, entries in sample])
+        more = "" if len(conflicts_by_mid) <= 10 else f" (and {len(conflicts_by_mid) - 10} more)"
+        if show_map:
+            import sys as _sys
+            focus = []
+            for entries in conflicts_by_mid.values():
+                for _, orect in entries:
+                    focus.append(orect)
+            projected_rects = [shifted_rect_cols(t) for t in shifting]
+            bounds_rects = ([rect(t) for t in stationary] + projected_rects) if (map_focus == 'full' or map_focus == 'no_scale') else (focus if map_focus == 'conflict' else None)
+            print(
+                render_tile_map(
+                    stationary,
+                    title="CONFLICT MAP",
+                    focus_rects=focus or None,
+                    bounds_rects=bounds_rects,
+                    highlight_rects=projected_rects,
+                    no_scale=(map_focus == 'no_scale' or map_focus == 'conflict'),
+                ),
+                end="",
+                file=_sys.stderr,
+            )
+        _die(f"Destination conflicts detected after delete_cols shift. Re-run with --allow_overlap. {details}{more}")
     if selected:
         details_lines = [
             f"WARNING: --delete_cols {start_col}..{end_col} will delete {len(selected)} tile(s).",
@@ -160,7 +242,6 @@ def delete_cols(
                     mark_rects=mark_rects,
                     bounds_rects=bounds_rects,
                     no_scale=(map_focus == 'no_scale'),
-                    show_axes=show_axes,
                 ),
                 end="",
                 file=_sys.stderr,
