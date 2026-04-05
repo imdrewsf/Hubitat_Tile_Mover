@@ -110,7 +110,7 @@ Modifiers:
   --no_overlap                     (spacing_set only; cannot be combined with --include_overlap)
   --row_range <start> <end>        (insert:cols and delete:cols only)
   --col_range <start> <end>        (insert:rows and delete:rows only)
-  --allow_overlap                (move/copy/merge and delete rows/cols)
+  --allow_overlap                (move/copy/merge, insert rows/cols, and delete rows/cols)
   --skip_overlap                 (move/copy/merge only; mutually exclusive with --allow_overlap)
   --force
   --cleanup_css

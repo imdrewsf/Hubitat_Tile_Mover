@@ -532,6 +532,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     if map_focus is None:
         map_focus = 'full'
     no_scale = (map_focus == 'no_scale')
+    show_ids = bool(getattr(args, 'show_ids', False))
+    show_axes = getattr(args, 'show_axes', None) or 'none'
+    if show_ids and not show_map:
+        die("--show_ids requires --show_map.")
+    if show_axes != 'none' and not show_map:
+        die("--show_axis:* requires --show_map. (legacy --show_axes:* also accepted)")
 
     # --undo_last is a standalone restore action.
     # It restores the previous backup and writes it to the last output destinations unless --output/--output_to is provided.
@@ -803,8 +809,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         or args.copy_cols or args.copy_rows or args.copy_range
         or args.merge_cols or args.merge_rows or args.merge_range
         or args.delete_rows or args.delete_cols
+        or args.insert_rows or args.insert_cols
     ):
-        die("--allow_overlap is only valid with --move_*, --copy_*, --merge_*, --delete_rows, or --delete_cols commands.")
+        die("--allow_overlap is only valid with --move_*, --copy_*, --merge_*, --delete_rows, --delete_cols, --insert_rows, or --insert_cols commands.")
     # --force is allowed for any action that would otherwise prompt for confirmation.
 
     # Copy-tile-css modes are expressed as action switches (mutually exclusive).
@@ -1019,7 +1026,12 @@ def main(argv: Optional[List[str]] = None) -> None:
             at_row=at_row,
             include_overlap=args.include_overlap,
             col_range=col_range,
+            allow_overlap=args.allow_overlap,
             debug=args.debug,
+            show_map=show_map,
+            map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
         )
 
     elif args.insert_cols:
@@ -1030,7 +1042,12 @@ def main(argv: Optional[List[str]] = None) -> None:
             at_col=at_col,
             include_overlap=args.include_overlap,
             row_range=row_range,
+            allow_overlap=args.allow_overlap,
             debug=args.debug,
+            show_map=show_map,
+            map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
         )
 
 
