@@ -36,6 +36,8 @@ def _conflict_scan_and_append(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
+    show_ids: bool = False,
+    show_axes: str = 'none',
     verbose: bool,
     debug: bool,
     label: str,
@@ -70,13 +72,15 @@ def _conflict_scan_and_append(
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
                         highlight_rects=hi_rects,
-                        no_scale=(map_focus == 'no_scale'),
+                        no_scale=True,
+                        show_ids=show_ids,
+                        show_axes=show_axes,
                     ),
                     end='',
                 )
             except Exception:
                 pass
-        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
+        die(f"Destination conflicts detected. Re-run with --overlaps:allow or --overlaps:skip. {details}{more}")
 
     added = 0
     appended_ids: Set[int] = set()
@@ -104,6 +108,8 @@ def copy_cols(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
+    show_ids: bool = False,
+    show_axes: str = 'none',
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -163,6 +169,8 @@ def copy_rows(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
+    show_ids: bool = False,
+    show_axes: str = 'none',
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,
@@ -225,6 +233,8 @@ def copy_range(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
+    show_ids: bool = False,
+    show_axes: str = 'none',
     verbose: bool,
     debug: bool,
     reserved_ids: Optional[Set[int]] = None,

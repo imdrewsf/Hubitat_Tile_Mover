@@ -8,7 +8,7 @@ from .util import die, normalize_newlines
 
 def normalize_argv(argv: List[str]) -> List[str]:
     """
-    Supports colon variants:
+    Supports colon variants and quoted/separate sort specs:
       --import:clipboard
       --import:file <path>
       --import:hub <dashboard_url>
@@ -18,23 +18,68 @@ def normalize_argv(argv: List[str]) -> List[str]:
       --output_to:terminal
       --output_to:file <path>
       --output_to:hub <dashboard_url>
-      --sort:irc
-      --order:rci (legacy)
+      --sort_json:rci
+      --sort_json "-rci"
+      --sort:rci                      (legacy alias)
+      --list_tiles:plain[:rci]
+      --list_tiles:plain "-hwi"
+      --list_tiles plain "-hwi"
       --indent:0
 
-    Converts to space-separated argv suitable for argparse.
+    Converts to argv suitable for argparse.
     """
     out: List[str] = []
-    for a in argv:
-        if a.startswith("--sort:"):
-            out.append("--sort=" + a.split(":", 1)[1])
+    list_kinds = {"plain", "tree", "overlap", "nested", "conflicts"}
+
+    def looks_like_json_sort(tok: str) -> bool:
+        return bool(tok) and not tok.startswith("--")
+
+    def looks_like_list_sort(tok: str) -> bool:
+        return bool(tok) and not tok.startswith("--")
+
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+
+        if a.startswith("--sort_json:") or a.startswith("--sort-json:"):
+            out.append("--sort_json=" + a.split(":", 1)[1])
+        elif a.startswith("--sort:"):
+            out.append("--sort_json=" + a.split(":", 1)[1])
+        elif a in ("--sort_json", "--sort-json", "--sort"):
+            if i + 1 < len(argv) and looks_like_json_sort(argv[i + 1]):
+                out.append('--sort_json=' + argv[i + 1])
+                i += 1
+            else:
+                out.append("--sort_json" if a != "--sort" else "--sort")
         elif a.startswith("--order:"):
             out.append("--order=" + a.split(":", 1)[1])
         elif a.startswith("--indent:"):
             out += ["--indent", a.split(":", 1)[1]]
         elif a.startswith("--trim:"):
             out += ["--trim", a.split(":", 1)[1]]
-        # --show_map:* is handled directly by argparse (no normalization needed)
+        elif a.startswith("--list_tiles:") or a.startswith("--list-tiles:"):
+            spec = a.split(":", 1)[1]
+            head = spec.split(":", 1)[0].strip().lower()
+            if ":" not in spec and head in list_kinds and i + 1 < len(argv) and looks_like_list_sort(argv[i + 1]):
+                spec = spec + ":" + argv[i + 1]
+                i += 1
+            out.append("--list_tiles=" + spec)
+        elif a in ("--list_tiles", "--list-tiles"):
+            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+                first = argv[i + 1]
+                spec = first
+                head = first.split(":", 1)[0].strip().lower()
+                if head in list_kinds:
+                    i += 1
+                    if ":" not in first and i + 1 < len(argv) and looks_like_list_sort(argv[i + 1]):
+                        spec = first + ":" + argv[i + 1]
+                        i += 1
+                    out.append("--list_tiles=" + spec)
+                else:
+                    out.append(a)
+            else:
+                out.append(a)
+        # --show_map:* and --show_axis:* are handled directly by argparse (legacy --show_axes:* also accepted)
         elif a.startswith("--import:"):
             out += ["--import", a.split(":", 1)[1]]
         elif a.startswith("--merge_source:") or a.startswith("--merge-source:"):
@@ -47,7 +92,9 @@ def normalize_argv(argv: List[str]) -> List[str]:
             out += ["--output_to", a.split(":", 1)[1]]
         else:
             out.append(a)
+        i += 1
     return out
+
 
 
 def assert_singleton_flags(argv: List[str], names: List[str]) -> None:

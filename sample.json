@@ -1,0 +1,6 @@
+{
+  "tiles": [
+    {"id": 1, "row": 1, "col": 1, "width": 2, "height": 2, "template": "switch", "device": 10},
+    {"id": 2, "row": 1, "col": 4, "width": 2, "height": 2, "template": "switch", "device": 11}
+  ]
+}

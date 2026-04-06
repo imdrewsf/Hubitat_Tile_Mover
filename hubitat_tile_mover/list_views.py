@@ -49,14 +49,6 @@ def parse_list_tiles_spec(spec: str | None) -> tuple[str, str]:
 
 
 
-def _touches(a: Rect, b: Rect) -> bool:
-    if rects_overlap(a, b):
-        return False
-    horiz = (a[3] + 1 == b[2] or b[3] + 1 == a[2]) and ranges_overlap(a[0], a[1], b[0], b[1])
-    vert = (a[1] + 1 == b[0] or b[1] + 1 == a[0]) and ranges_overlap(a[2], a[3], b[2], b[3])
-    return horiz or vert
-
-
 def _count_tile_scoped_rules(css: str) -> Dict[int, int]:
     counts: Dict[int, int] = {}
     if not css:
@@ -87,7 +79,6 @@ def _placement_map(tiles: List[Dict[str, Any]]) -> Dict[int, str]:
     has_parent = {tid: False for tid in ids}
     has_child = {tid: False for tid in ids}
     has_partial = {tid: False for tid in ids}
-    has_touch = {tid: False for tid in ids}
 
     for i, aid in enumerate(ids):
         ra = rects[aid]
@@ -103,9 +94,6 @@ def _placement_map(tiles: List[Dict[str, Any]]) -> Dict[int, str]:
             elif rel in ('overlaps', 'same'):
                 has_partial[aid] = True
                 has_partial[bid] = True
-            elif _touches(ra, rb):
-                has_touch[aid] = True
-                has_touch[bid] = True
 
     placement: Dict[int, str] = {}
     for tid in ids:
@@ -115,8 +103,6 @@ def _placement_map(tiles: List[Dict[str, Any]]) -> Dict[int, str]:
             placement[tid] = 'container'
         elif has_partial[tid]:
             placement[tid] = 'overlapping'
-        elif has_touch[tid]:
-            placement[tid] = 'cluster'
         else:
             placement[tid] = 'independent'
     return placement
@@ -147,9 +133,70 @@ def _tile_rows_for_table(tiles: List[Dict[str, Any]], css_text: str = '') -> Lis
     return rows
 
 
+def _plain_sort_value(key: str, row: Dict[str, str]):
+    if key in {'tile_id', 'row', 'col', 'height', 'width', 'css_rules'}:
+        return int(row[key] or 0)
+    val = row[key].strip().lower()
+    if key == 'device' and val.isdigit():
+        return (0, int(val))
+    return (1, val)
+
+
+def _parse_plain_sort_spec(user_spec: str) -> List[Tuple[str, bool]]:
+    spec = (user_spec or '').strip().lower()
+    if spec == '':
+        spec = 'rci'
+    valid = {'i', 'r', 'c', 'h', 'w', 'p', 'd', 't', 's'}
+    out: List[Tuple[str, bool]] = []
+    seen: set[str] = set()
+    desc_next = False
+    for ch in spec:
+        if ch in (' ', '\t', ',', ';', ':', '_', '/', '\\', '.'):
+            continue
+        if ch == '-':
+            desc_next = True
+            continue
+        if ch not in valid:
+            die(
+                f"Invalid --list_tiles plain sort '{user_spec}'. Use keys i,r,c,h,w,p,d,t,s and optional '-' for descending. "
+                f"Examples: --list_tiles:plain:rci, --list_tiles:plain:-hwi, --list_tiles:plain:-s-r"
+            )
+        if ch in seen:
+            die(f"Invalid --list_tiles plain sort '{user_spec}'. Keys must not repeat.")
+        out.append((ch, desc_next))
+        seen.add(ch)
+        desc_next = False
+    if desc_next:
+        die(f"Invalid --list_tiles plain sort '{user_spec}'. Trailing '-' must be followed by a key.")
+    for k in ['r', 'c', 'i']:
+        if k not in seen:
+            out.append((k, False))
+    return out
+
+
+def _sort_plain_rows(rows: List[Dict[str, str]], sort_spec: str) -> List[Dict[str, str]]:
+    key_map = {
+        'i': 'tile_id',
+        'r': 'row',
+        'c': 'col',
+        'h': 'height',
+        'w': 'width',
+        'p': 'placement',
+        'd': 'device',
+        't': 'template',
+        's': 'css_rules',
+    }
+    parsed = list(reversed(_parse_plain_sort_spec(sort_spec)))
+    out = list(rows)
+    for k, desc in parsed:
+        field = key_map[k]
+        out.sort(key=lambda row, f=field: _plain_sort_value(f, row), reverse=desc)
+    return out
+
+
 def _render_plain_table(tiles: List[Dict[str, Any]], sort_spec: str, css_text: str = '') -> str:
-    ordered = sort_tiles(list(tiles), sort_spec)
-    rows = _tile_rows_for_table(ordered, css_text)
+    rows = _tile_rows_for_table(list(tiles), css_text)
+    rows = _sort_plain_rows(rows, sort_spec)
     headers = ['Tile ID', 'Row', 'Col', 'Height', 'Width', 'Placement', 'Device', 'Template', 'CSS Rules']
     keys = ['tile_id', 'row', 'col', 'height', 'width', 'placement', 'device', 'template', 'css_rules']
     numeric_keys = {'tile_id', 'row', 'col', 'height', 'width', 'css_rules'}
@@ -289,10 +336,10 @@ def _render_nested_tree(comp: List[Dict[str, Any]], sort_spec: str, include_over
 
 def render_list_tiles(tiles: List[Dict[str, Any]], spec: str | None, css_text: str = "") -> str:
     kind, sort_spec = parse_list_tiles_spec(spec)
-    ordered = sort_tiles(list(tiles), sort_spec)
     lines: List[str] = []
     if kind == 'plain':
         return _render_plain_table(tiles, sort_spec, css_text)
+    ordered = sort_tiles(list(tiles), sort_spec)
     comps_all = _components(ordered, include_contains=True, conflicts_only=False)
     comps_nested = []
     for comp in comps_all:
