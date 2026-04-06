@@ -51,8 +51,10 @@ def move_cols(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    verbose: bool,
-    debug: bool,
+    show_ids: bool = False,
+    show_axes: str = 'none',
+    verbose: bool = False,
+    debug: bool = False,
 ) -> None:
     if start_col <= 0 or end_col <= 0 or dest_start_col <= 0:
         die("--move_cols values must be positive (1-based).")
@@ -99,14 +101,16 @@ def move_cols(
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
                         highlight_rects=moved_rects,
-                        no_scale=(map_focus == 'no_scale'),
+                        no_scale=True,
+                        show_ids=show_ids,
+                        show_axes=show_axes,
                     ),
                     end='',
                     file=_sys.stderr,
                 )
             except Exception:
                 pass
-        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
+        die(f"Destination conflicts detected. Re-run with --overlaps:allow or --overlaps:skip. {details}{more}")
 
     for t in moving:
         tid = as_int(t, "id")
@@ -134,8 +138,10 @@ def move_rows(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    verbose: bool,
-    debug: bool,
+    show_ids: bool = False,
+    show_axes: str = 'none',
+    verbose: bool = False,
+    debug: bool = False,
 ) -> None:
     if start_row <= 0 or end_row <= 0 or dest_start_row <= 0:
         die("--move_rows values must be positive (1-based).")
@@ -182,14 +188,16 @@ def move_rows(
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
                         highlight_rects=moved_rects,
-                        no_scale=(map_focus == 'no_scale'),
+                        no_scale=True,
+                        show_ids=show_ids,
+                        show_axes=show_axes,
                     ),
                     end='',
                     file=_sys.stderr,
                 )
             except Exception:
                 pass
-        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
+        die(f"Destination conflicts detected. Re-run with --overlaps:allow or --overlaps:skip. {details}{more}")
 
     for t in moving:
         tid = as_int(t, "id")
@@ -220,8 +228,10 @@ def move_range(
     skip_overlap: bool,
     show_map: bool,
     map_focus: str = 'full',
-    verbose: bool,
-    debug: bool,
+    show_ids: bool = False,
+    show_axes: str = 'none',
+    verbose: bool = False,
+    debug: bool = False,
 ) -> None:
     if min(src_top_row, src_left_col, src_bottom_row, src_right_col, dest_top_row, dest_left_col) <= 0:
         die("--move_range values must be positive (1-based).")
@@ -282,14 +292,16 @@ def move_range(
                         focus_rects=focus,
                         bounds_rects=bounds_rects,
                         highlight_rects=moved_rects,
-                        no_scale=(map_focus == 'no_scale'),
+                        no_scale=True,
+                        show_ids=show_ids,
+                        show_axes=show_axes,
                     ),
                     end='',
                     file=_sys.stderr,
                 )
             except Exception:
                 pass
-        die(f"Destination conflicts detected. Re-run with --allow_overlap or --skip_overlap. {details}{more}")
+        die(f"Destination conflicts detected. Re-run with --overlaps:allow or --overlaps:skip. {details}{more}")
 
     for t in moving:
         tid = as_int(t, "id")

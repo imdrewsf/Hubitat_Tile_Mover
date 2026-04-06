@@ -5,6 +5,7 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 from .util import die, ilog, prompt_yes_no, prompt_yes_no_or_die, format_id_sample, ok, warn, wlog, layout_fingerprint
+from .list_views import render_list_tiles
 
 def vlog(enabled: bool, msg: str) -> None:
     """Verbose logger."""
@@ -76,6 +77,16 @@ from .css_ops import (
 UNDO_STALE_SECONDS = 60 * 60  # 1 hour
 
 
+def _selection_include_partial(args) -> bool:
+    """Return normalized selection mode for non-spacing actions."""
+    return bool(getattr(args, "select_include_partial", False) or getattr(args, "legacy_include_overlap", False))
+
+
+def _spacing_include_overlap(args) -> bool:
+    """Return legacy spacing-only overlap-group flag."""
+    return bool(getattr(args, "legacy_include_overlap", False))
+
+
 def _parse_inclusive_range(name: str, pair: Optional[List[int]]) -> Optional[Tuple[int, int]]:
     if pair is None:
         return None
@@ -99,7 +110,7 @@ def _compute_before_map_mark_rects(
 ) -> List[Tuple[int, int, int, int]]:
     """Return rects (r1,r2,c1,c2) to mark in the BEFORE map as affected by the requested action(s)."""
 
-    include_overlap = bool(getattr(args, "include_overlap", False))
+    include_overlap = _selection_include_partial(args)
 
     marked_ids: set[int] = set()
     marked_tiles: List[Dict] = []
@@ -478,10 +489,10 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     argv = normalize_argv(argv)
 
-    # If invoked with no switches/args, show short help instead of attempting to parse input.
+    # If invoked with no switches/args, show very brief help instead of attempting to parse input.
     if not argv:
         p = build_parser()
-        p.print_help()
+        p.print_brief_help()
         return
 
 
@@ -493,20 +504,26 @@ def main(argv: Optional[List[str]] = None) -> None:
     args = parser.parse_args(argv)
 
     # Option sanity checks
-    if getattr(args, "no_overlap", False) and getattr(args, "include_overlap", False):
-        die("ERROR: --no_overlap and --include_overlap cannot be used together.")
+    if getattr(args, "select_include_partial", False) and (getattr(args, "spacing_add", None) is not None or getattr(args, "spacing_set", None) is not None):
+        die("ERROR: --select:include_partial is not valid with --spacing_add:* or --spacing_set:*. The current spacing overlap-group behavior still uses legacy --include_overlap.")
+    if getattr(args, "remove_overlap", False) and _spacing_include_overlap(args):
+        die("ERROR: --overlaps:remove and legacy --include_overlap cannot be used together.")
 
-    # --no_overlap scope: only valid with --spacing_set:*
-    if getattr(args, "no_overlap", False) and getattr(args, "spacing_set", None) is None:
-        die("ERROR: --no_overlap is only valid with --spacing_set:rows|cols|all.")
-    if getattr(args, "no_overlap", False) and getattr(args, "spacing_add", None) is not None:
-        die("ERROR: --no_overlap cannot be used with --spacing_add:*. Use --spacing_set:* instead.")
+    # --overlaps:remove scope: only valid with --spacing_set:*
+    if getattr(args, "remove_overlap", False) and getattr(args, "spacing_set", None) is None:
+        die("ERROR: --overlaps:remove is only valid with --spacing_set:rows|cols|all.")
+    if getattr(args, "remove_overlap", False) and getattr(args, "spacing_add", None) is not None:
+        die("ERROR: --overlaps:remove cannot be used with --spacing_add:*. Use --spacing_set:* instead.")
 
     if args.indent < 0:
         die("--indent must be >= 0.")
 
     import_kind, import_path = parse_import_spec(args.import_spec)
     outputs = parse_output_to_specs(args.output_to)
+
+    # Standalone tile reports use the normal output destinations, but never hub.
+    if getattr(args, "list_tiles", None) and any(k == "hub" for (k, _) in outputs):
+        die("--output:hub is not valid with --list_tiles. Use --output:terminal, --output:clipboard, or --output:file.")
 
     # Resolve hub URLs:
     # - import_path is the dashboard URL when import_kind == 'hub'
@@ -538,6 +555,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         die("--show_ids requires --show_map.")
     if show_axes != 'none' and not show_map:
         die("--show_axis:* requires --show_map. (legacy --show_axes:* also accepted)")
+    list_tiles_spec = getattr(args, "list_tiles", None)
 
     # --undo_last is a standalone restore action.
     # It restores the previous backup and writes it to the last output destinations unless --output/--output_to is provided.
@@ -780,13 +798,20 @@ def main(argv: Optional[List[str]] = None) -> None:
     )
 
     has_sort = bool((args.sort is not None) or (getattr(args, "order", None) is not None))
-    # Standalone map view mode: --show_map (any mode) with no other actions.
-    # This mode should only render the imported layout map and still check for orphan CSS.
-    view_only = bool(show_map) and not (has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort)
+    # Standalone view modes.
+    list_tiles_only = bool(list_tiles_spec) and not (
+        bool(show_map) or has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort
+    )
+    view_only = bool(show_map) and not (
+        bool(list_tiles_spec) or has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort
+    )
 
-    if not (has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort or view_only):
+    if bool(list_tiles_spec) and not list_tiles_only:
+        die("--list_tiles is a standalone action and cannot be combined with layout actions, --show_map, --sort_json, --trim, spacing, or CSS operations.")
+
+    if not (has_movement or has_trim or getattr(args, 'spacing_add', None) is not None or getattr(args, 'spacing_set', None) is not None or args.scrub_css or args.compact_css or has_sort or view_only or list_tiles_only):
         die(
-            "No operation specified. Use one movement/edit option and/or trim and/or --sort and/or --scrub_css and/or --compact_css, or use --show_map to view the imported layout. Use -h for help."
+            "No operation specified. Use one movement/edit option and/or trim and/or --sort_json and/or --scrub_css and/or --compact_css, or use standalone --show_map or standalone --list_tiles to view the imported layout. Use -h for help."
         )
 
     # Validate range filters usage
@@ -797,13 +822,13 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Validate conflict policy usage
     if args.skip_overlap and args.allow_overlap:
-        die("--skip_overlap and --allow_overlap cannot be used at the same time.")
+        die("--overlaps:skip and --overlaps:allow cannot be used at the same time.")
     if args.skip_overlap and not (
         args.move_cols or args.move_rows or args.move_range
         or args.copy_cols or args.copy_rows or args.copy_range
         or args.merge_cols or args.merge_rows or args.merge_range
     ):
-        die("--skip_overlap is only valid with --move_*, --copy_*, or --merge_* commands.")
+        die("--overlaps:skip is only valid with --move_*, --copy_*, or --merge_* commands.")
     if args.allow_overlap and not (
         args.move_cols or args.move_rows or args.move_range
         or args.copy_cols or args.copy_rows or args.copy_range
@@ -811,7 +836,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         or args.delete_rows or args.delete_cols
         or args.insert_rows or args.insert_cols
     ):
-        die("--allow_overlap is only valid with --move_*, --copy_*, --merge_*, --delete_rows, --delete_cols, --insert_rows, or --insert_cols commands.")
+        die("--overlaps:allow is only valid with --move_*, --copy_*, --merge_*, --delete_rows, --delete_cols, --insert_rows, or --insert_cols commands.")
     # --force is allowed for any action that would otherwise prompt for confirmation.
 
     # Copy-tile-css modes are expressed as action switches (mutually exclusive).
@@ -843,7 +868,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         vlog(True, f"Output format: {args.output_format}")
         vlog(True, f"Formatting: {'minify=true' if args.minify else f'indent={args.indent}'}")
         vlog(True, f"Newlines: {args.newline}")
-        vlog(True, f"include_overlap={bool(args.include_overlap)} force={bool(args.force)}")
+        vlog(True, f"select:include_partial={_selection_include_partial(args)} legacy_spacing_include_overlap={_spacing_include_overlap(args)} force={bool(args.force)}")
         vlog(True, f"allow_overlap={bool(args.allow_overlap)} skip_overlap={bool(args.skip_overlap)}")
         vlog(True, f"Trim: {args.trim if args.trim is not None else '(none)'} (do_left={do_left} do_top={do_top})")
         if args.sort is not None or args.order is not None:
@@ -893,7 +918,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         if args.output_format in ("minimal", "bare", "container", "list"):
             die("--output:hub cannot be used with --output_format:minimal or --output_format:bare.")
     # Tile list validation
-    # Some actions (merge, scrub_css) can run even when the dashboard has no tiles yet.
+    # Some actions (merge, CSS scrub) can run even when the dashboard has no tiles yet.
     has_tiles = bool(tiles_any)
     merge_like = bool(merge_source_kind) and bool(args.merge_cols or args.merge_rows or args.merge_range)
     scrub_like = bool(args.scrub_css)
@@ -901,7 +926,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     def _ga(name):
         return getattr(args, name, None)
-    show_map_only = bool(show_map) and not any([
+    show_map_only = (bool(show_map) or bool(list_tiles_spec)) and not any([
         _ga('sort'), _ga('sort_spec'), _ga('trim'),
         _ga('insert_rows'), _ga('insert_cols'),
         _ga('move_cols'), _ga('move_rows'), _ga('move_range'),
@@ -977,6 +1002,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                 mark_rects=before_mark_rects,
                 bounds_rects=bounds_rects,
                 no_scale=no_scale,
+                show_ids=show_ids,
+                show_axes=show_axes,
             ),
             end='',
             file=sys.stderr,
@@ -1011,6 +1038,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             write_outputs(non_hub_outputs0, args.newline, out_text0)
         return
 
+    if list_tiles_only:
+        report_outputs = outputs if args.output_to else [('terminal', None)]
+        _, css_text0 = get_custom_css(obj)
+        tile_report_text = render_list_tiles(tiles_before_map, list_tiles_spec, css_text0 or '')
+        write_outputs(report_outputs, args.newline, tile_report_text)
+        return
+
     # Treat tile ids referenced in customCSS as reserved for id assignment (avoids collisions with orphaned CSS).
     css_key_pre, css_text_pre = get_custom_css(obj)
     reserved_css_ids = tile_ids_in_css(css_text_pre or "") if css_key_pre is not None else set()
@@ -1024,7 +1058,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             tiles,
             count=count,
             at_row=at_row,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             col_range=col_range,
             allow_overlap=args.allow_overlap,
             debug=args.debug,
@@ -1040,7 +1074,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             tiles,
             count=count,
             at_col=at_col,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             row_range=row_range,
             allow_overlap=args.allow_overlap,
             debug=args.debug,
@@ -1059,8 +1093,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         adjust_tile_spacing(
             tiles,
             cells=int(cells),
-            include_overlap=bool(args.include_overlap),
-            no_overlap=bool(getattr(args, "no_overlap", False)),
+            include_overlap=_spacing_include_overlap(args),
+            no_overlap=bool(getattr(args, "remove_overlap", False)),
             mode=str(mode),
         )
         if getattr(args, "verbose", False):
@@ -1085,8 +1119,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         set_tile_spacing(
             tiles,
             gap=gap,
-            include_overlap=bool(args.include_overlap),
-            no_overlap=bool(getattr(args, 'no_overlap', False)),
+            include_overlap=_spacing_include_overlap(args),
+            no_overlap=bool(getattr(args, 'remove_overlap', False)),
             mode=mode,
         )
         # Defensive: ensure axis-only modes do not alter the other axis, regardless of ops implementation.
@@ -1112,11 +1146,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             start_col=s,
             end_col=e,
             dest_start_col=d,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -1128,11 +1164,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             start_row=s,
             end_row=e,
             dest_start_row=d,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -1147,11 +1185,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             src_right_col=c2,
             dest_top_row=dr,
             dest_left_col=dc,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
         )
@@ -1164,11 +1204,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             start_col=s,
             end_col=e,
             dest_start_col=d,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1181,11 +1223,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             start_row=s,
             end_row=e,
             dest_start_row=d,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1201,11 +1245,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             src_right_col=c2,
             dest_top_row=dr,
             dest_left_col=dc,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1219,11 +1265,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             start_col=s,
             end_col=e,
             dest_start_col=d,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1239,11 +1287,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             start_row=s,
             end_row=e,
             dest_start_row=d,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1262,11 +1312,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             src_right_col=c2,
             dest_top_row=dr,
             dest_left_col=dc,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             allow_overlap=args.allow_overlap,
             skip_overlap=args.skip_overlap,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
             verbose=args.verbose,
             debug=args.debug,
             reserved_ids=reserved_css_ids,
@@ -1280,7 +1332,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             tiles,
             start_row=s,
             end_row=e,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             col_range=col_range,
             force=args.force,
             allow_overlap=args.allow_overlap,
@@ -1288,6 +1340,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             debug=args.debug,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
         )
 
     elif args.delete_cols:
@@ -1296,7 +1350,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             tiles,
             start_col=s,
             end_col=e,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             row_range=row_range,
             force=args.force,
             allow_overlap=args.allow_overlap,
@@ -1304,6 +1358,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             debug=args.debug,
             show_map=show_map,
             map_focus=map_focus,
+            show_ids=show_ids,
+            show_axes=show_axes,
         )
 
     elif args.clear_rows:
@@ -1312,7 +1368,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             tiles,
             start_row=s,
             end_row=e,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
@@ -1324,7 +1380,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             tiles,
             start_col=s,
             end_col=e,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
@@ -1338,7 +1394,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             left_col=lc,
             bottom_row=br,
             right_col=rc,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
@@ -1350,7 +1406,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             tiles,
             start_row=s,
             end_row=e,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
@@ -1362,7 +1418,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             tiles,
             start_col=s,
             end_col=e,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
@@ -1376,7 +1432,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             left_col=lc,
             bottom_row=br,
             right_col=rc,
-            include_overlap=args.include_overlap,
+            include_overlap=_selection_include_partial(args),
             force=args.force,
             verbose=args.verbose,
             debug=args.debug,
@@ -1598,7 +1654,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         from .css_ops import process_standalone_comments_for_removed_tiles
 
         ids_to_clean = deleted_ids + cleared_ids
-        details = f"--cleanup_css will remove CSS rules for {len(ids_to_clean)} tile id(s). IDs: {format_id_sample(ids_to_clean)}"
+        details = f"--css:cleanup will remove CSS rules for {len(ids_to_clean)} tile id(s). IDs: {format_id_sample(ids_to_clean)}"
         prompt_yes_no_or_die(
             args.force,
             f"This will remove CSS rules for {len(ids_to_clean)} tile id(s). Are you sure you want to continue?",
@@ -1650,11 +1706,11 @@ def main(argv: Optional[List[str]] = None) -> None:
     if has_trim:
         trim_tiles(tiles, do_left=do_left, do_top=do_top, debug=args.debug)
 
-    # Legacy: map --order (hidden) to --sort if needed.
+    # Legacy: map hidden --order to --sort_json if needed.
     if args.sort is None and getattr(args, "order", None) is not None:
         args.sort = args.order
 
-    # Sort last (only when --sort is present; otherwise preserve original tile order).
+    # Sort last (only when --sort_json is present; otherwise preserve original tile order).
     final_tiles = sort_tiles(tiles, args.sort) if args.sort is not None else tiles
 
     # Track which tiles changed position (or are new) for maps and strict overlap checks.
@@ -1708,6 +1764,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                         conflict_rects.append((or1, or2, oc1, oc2))
 
         focus_color = "yellow" if getattr(args, "allow_overlap", False) else "red"
+        outcome_no_scale = no_scale or bool(conflict_rects)
         print(
             render_tile_map(
                 final_tiles,
@@ -1715,7 +1772,9 @@ def main(argv: Optional[List[str]] = None) -> None:
                 changed_ids=changed_ids,
                 focus_rects=conflict_rects,
                 focus_color=focus_color,
-                no_scale=no_scale,
+                no_scale=outcome_no_scale,
+                show_ids=show_ids,
+                show_axes=show_axes,
             ),
             end="",
             file=sys.stderr,
@@ -1776,14 +1835,16 @@ def main(argv: Optional[List[str]] = None) -> None:
                         title="CONFLICT MAP (OUTCOME)",
                         focus_rects=[orect],
                         focus_color="red",
-                        no_scale=no_scale,
+                        no_scale=True,
+                        show_ids=show_ids,
+                        show_axes=show_axes,
                     ),
                     end="",
                     file=sys.stderr,
                 )
             die(
                 f"Overlapping tiles detected in result: id={id1} overlaps id={id2} at r{orect[0]}..{orect[1]},c{orect[2]}..{orect[3]}. "
-                "Re-run with --allow_overlap or --skip_overlap."
+                "Re-run with --overlaps:allow or --overlaps:skip."
             )
 
     output_obj = build_output_object(kind, full_container, final_tiles, args.output_format)

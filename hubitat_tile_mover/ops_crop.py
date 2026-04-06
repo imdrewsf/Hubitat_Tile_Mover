@@ -34,7 +34,7 @@ def _warn_and_prompt(
         details_lines.append(extra_warning)
         if not (verbose or debug):
             # Keep this readable for normal users.
-            friendly += " Note: some tiles overlap the kept range but do not start inside it (because --include_overlap is not set)."
+            friendly += " Note: some tiles overlap the kept range but do not start inside it (because --select:include_partial is not set)."
     friendly += " Are you sure you want to continue?"
 
     if show_map and removed_tiles and all_tiles is not None:
@@ -108,7 +108,7 @@ def crop_to_rows(
         sids = [as_int(t, "id") for t in straddlers]
         extra = (
             f"WARNING: {len(straddlers)} tile(s) overlap the kept rows but do not start inside them "
-            f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
+            f"(removed because --select:include_partial not set). IDs: {format_id_sample(sids)}"
         )
 
     _warn_and_prompt(force, f"crop_to_rows {start_row}..{end_row}", removed, removed_ids, extra_warning=extra, verbose=verbose, debug=debug, show_map=show_map, map_focus=map_focus, all_tiles=tiles)
@@ -160,7 +160,7 @@ def crop_to_cols(
         sids = [as_int(t, "id") for t in straddlers]
         extra = (
             f"WARNING: {len(straddlers)} tile(s) overlap the kept cols but do not start inside them "
-            f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
+            f"(removed because --select:include_partial not set). IDs: {format_id_sample(sids)}"
         )
 
     _warn_and_prompt(force, f"crop_to_cols {start_col}..{end_col}", removed, removed_ids, extra_warning=extra, verbose=verbose, debug=debug, show_map=show_map, map_focus=map_focus, all_tiles=tiles)
@@ -217,7 +217,7 @@ def crop_to_range(
         sids = [as_int(t, "id") for t in straddlers]
         extra = (
             f"WARNING: {len(straddlers)} tile(s) overlap the kept range but do not start inside it "
-            f"(removed because --include_overlap not set). IDs: {format_id_sample(sids)}"
+            f"(removed because --select:include_partial not set). IDs: {format_id_sample(sids)}"
         )
 
     _warn_and_prompt(force, f"crop_to_range {top_row},{left_col}..{bottom_row},{right_col}", removed, removed_ids, extra_warning=extra, verbose=verbose, debug=debug, show_map=show_map, map_focus=map_focus, all_tiles=tiles)

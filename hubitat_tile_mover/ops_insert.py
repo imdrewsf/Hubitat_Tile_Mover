@@ -103,7 +103,7 @@ def insert_rows(
                 end='',
                 file=_sys.stderr,
             )
-        die(f"Destination conflicts detected after insert_rows shift. Re-run with --allow_overlap. {details}{more}")
+        die(f"Destination conflicts detected after insert_rows shift. Re-run with --overlaps:allow. {details}{more}")
 
     for t in shifting:
         tid = as_int(t, "id")
@@ -209,7 +209,7 @@ def insert_cols(
                 end='',
                 file=_sys.stderr,
             )
-        die(f"Destination conflicts detected after insert_cols shift. Re-run with --allow_overlap. {details}{more}")
+        die(f"Destination conflicts detected after insert_cols shift. Re-run with --overlaps:allow. {details}{more}")
 
     for t in shifting:
         tid = as_int(t, "id")

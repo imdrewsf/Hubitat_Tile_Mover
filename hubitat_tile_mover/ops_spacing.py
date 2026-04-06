@@ -214,8 +214,8 @@ def adjust_tile_spacing(
 
     Overlap behavior matches spacing_set:
       - Default: overlapping tiles are grouped into overlap unions (units).
-      - --no_overlap: treat every tile as its own unit (fully un-overlap globally).
-      - --include_overlap (without --no_overlap): apply adjustment *within* each original overlap union
+      - --overlaps:remove: treat every tile as its own unit (fully un-overlap globally).
+      - legacy --include_overlap (without --overlaps:remove): apply adjustment *within* each original overlap union
         (same-origin grouped), then pack the unions relative to each other because union extents change.
 
     Notes:
@@ -395,11 +395,11 @@ def set_tile_spacing(
     - Default (no --include_overlap):
         Overlapping tiles are grouped into overlap unions; spacing is enforced between unions.
 
-    - With --include_overlap AND --no_overlap:
+    - With legacy --include_overlap AND --overlaps:remove:
         Legacy behavior (preserved): overlapping tiles are treated as individual tiles (except same-origin
         tiles are grouped) and spacing is enforced between all tiles, effectively "unoverlapping" globally.
 
-    - With --include_overlap (and WITHOUT --no_overlap):
+    - With legacy --include_overlap (and WITHOUT --overlaps:remove):
         New behavior: spacing is applied *inside* each original overlap union only (except same-origin grouping),
         and the union's bounding box may grow/shrink. Then unions are packed relative to each other so external
         spacing constraints are still respected as unions change size.

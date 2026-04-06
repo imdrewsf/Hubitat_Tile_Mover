@@ -29,6 +29,8 @@ def delete_rows(
     debug: bool = False,
     show_map: bool = False,
     map_focus: str = 'full',
+    show_ids: bool = False,
+    show_axes: str = 'none',
 ) -> List[int]:
     if start_row <= 0 or end_row <= 0:
         _die("--delete_rows values must be positive (1-based).")
@@ -92,7 +94,7 @@ def delete_rows(
                 end="",
                 file=_sys.stderr,
             )
-        _die(f"Destination conflicts detected after delete_rows shift. Re-run with --allow_overlap. {details}{more}")
+        _die(f"Destination conflicts detected after delete_rows shift. Re-run with --overlaps:allow. {details}{more}")
     if selected:
         details_lines = [
             f"WARNING: --delete_rows {start_row}..{end_row} will delete {len(selected)} tile(s).",
@@ -159,6 +161,8 @@ def delete_cols(
     debug: bool = False,
     show_map: bool = False,
     map_focus: str = 'full',
+    show_ids: bool = False,
+    show_axes: str = 'none',
 ) -> List[int]:
     if start_col <= 0 or end_col <= 0:
         _die("--delete_cols values must be positive (1-based).")
@@ -222,7 +226,7 @@ def delete_cols(
                 end="",
                 file=_sys.stderr,
             )
-        _die(f"Destination conflicts detected after delete_cols shift. Re-run with --allow_overlap. {details}{more}")
+        _die(f"Destination conflicts detected after delete_cols shift. Re-run with --overlaps:allow. {details}{more}")
     if selected:
         details_lines = [
             f"WARNING: --delete_cols {start_col}..{end_col} will delete {len(selected)} tile(s).",
